@@ -8,3 +8,6 @@ const configFile = (name) => JSON.parse(readFileSync(join(import.meta.dirname, "
 export const SUMMARY_PAGES = new Set(configFile("summary-pages.json").pages);
 
 export const loadBaseline = () => configFile("baseline.json");
+
+// Phrase expansions for questions ("open a trade" adds OrderSend, CTrade::Buy ...).
+export const EXPANSIONS = configFile("expansions.json").expansions;

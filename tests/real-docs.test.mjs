@@ -12,7 +12,9 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { checkBaseline } from "../src/checks.mjs";
 import { loadBaseline } from "../src/config.mjs";
+import { FIND_BUDGET, findText } from "../src/find.mjs";
 import { buildIndex } from "../src/indexer.mjs";
+import { readPage } from "../src/search.mjs";
 import { missingFromCard } from "./helpers.mjs";
 
 const reference = process.env.MQL5_DOCS_REFERENCE;
@@ -62,6 +64,34 @@ test("real docs: every baseline name resolves with its kind, value, enum and phr
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);
+});
+
+test("real docs: reading splits a long example and lands on a constant deep in a table", { skip }, () => {
+  const context = { tag: "realtst" };
+  const first = readPage(db, { id: "mql5/databaseexecute" }, context);
+  const pages = Number(/page 1 of (\d+)/.exec(first)[1]);
+  assert.ok(pages >= 7, `DatabaseExecute has ${pages} pages`);
+  for (let page = 1; page <= pages; page++) {
+    const text = readPage(db, { id: "mql5/databaseexecute", page }, context);
+    assert.ok(text.length <= 4300, `page ${page} is ${text.length} characters`);
+  }
+  const error = readPage(db, { id: "mql5/errorcodes", focus: "ERR_USER_ERROR_FIRST" }, context).split("\n");
+  assert.ok(error.slice(1, 4).some((line) => line.includes("ERR_USER_ERROR_FIRST")), error.slice(0, 4).join("\n"));
+});
+
+test("real docs: find keeps names apart and every reply within the budget", { skip }, () => {
+  const context = { tag: "realtst", downloaded: "2026-10-21" };
+  const [, create] = findText(db, ["Create"], context).split("\n\n");
+  assert.match(create, /^= Create · \d{3} pages share this name: .*\. Ask with Class::Method\.$/, "104 class methods, no global winner");
+  const [, indicator] = findText(db, ["CiAC::Create"], context).split("\n\n");
+  assert.match(indicator, /^= CiAC::Create · method · mql5\/ciaccreate\n/);
+  const huge = findText(db, ["DynamicModeDecompositionQR"], context);
+  assert.ok(huge.length <= FIND_BUDGET, `${huge.length}`);
+  assert.match(huge, /\n\[continues: mql5_read id=mql5\/dynamicmodedecompositionqr focus=\w+\]$/);
+  const names = loadBaseline().names.filter((entry) => entry.kind !== "none").slice(0, 16).map((entry) => entry.name);
+  const batch = findText(db, names, context);
+  assert.ok(batch.length <= FIND_BUDGET, `${batch.length}`);
+  assert.equal(batch.match(/^= /gm).length, 16, "every name keeps its outcome line");
 });
 
 test("real docs: briefs keep their signature or a read pointer", { skip }, () => {

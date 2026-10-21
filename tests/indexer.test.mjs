@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { buildIndex, decodePage, parsePage, parseSitemap, SCHEMA_VERSION } from "../src/indexer.mjs";
+import { SCHEMA_VERSION } from "../src/data.mjs";
+import { buildIndex, decodePage, parsePage, parseSitemap } from "../src/indexer.mjs";
 
 const fixtures = join(import.meta.dirname, "fixtures", "mql5");
 const fixturePage = (file) => parsePage(decodePage(readFileSync(join(fixtures, file))));
@@ -81,10 +82,11 @@ test("buildIndex stores pages, blocks, names and searchable sections", () => {
     try {
       const all = (sql, ...args) => db.prepare(sql).all(...args);
       assert.deepEqual(all("select id from pages order by id").map((row) => row.id),
-        ["mql5/cfilecopy", "mql5/constant_indices", "mql5/copyrates", "mql5/ctrade", "mql5/ctradebuy", "mql5/enum_day_sample",
-          "mql5/enum_trade_return_codes", "mql5/matrix_copy", "mql5/matrix_copyrates", "mql5/orderproperties", "mql5/ordersend"]);
+        ["mql5/cfilecopy", "mql5/cisamplema", "mql5/cisamplemacreate", "mql5/constant_indices", "mql5/copyrates", "mql5/ctrade",
+          "mql5/ctradebuy", "mql5/enum_day_sample", "mql5/enum_trade_return_codes", "mql5/isamplelistcount", "mql5/matrix_copy",
+          "mql5/matrix_copyrates", "mql5/orderproperties", "mql5/ordersend", "mql5/samplearrows", "mql5/samplearrowscreate"]);
       assert.equal(all("select breadcrumb from pages where id = 'mql5/ctradebuy'")[0].breadcrumb,
-        "MQL5 Reference > Trade Classes & Helpers > CTrade > Buy");
+        "MQL5 Reference > Trade Classes & Helpers > CTrade > Buy", "the nameless site-properties object adds no level");
 
       const names = (name) => all("select page_id, kind, member, anchor from names where name = ? order by page_id, kind", name)
         .map((row) => ({ ...row }));
@@ -94,6 +96,16 @@ test("buildIndex stores pages, blocks, names and searchable sections", () => {
       assert.deepEqual(names("vector::CopyRates").map((row) => row.page_id), ["mql5/matrix_copyrates"]);
       assert.deepEqual(names("CopyRates").map((row) => [row.page_id, row.member]),
         [["mql5/copyrates", 0], ["mql5/matrix_copyrates", 1]], "the global function is not a member");
+      // Methods under a descriptive contents entry: the owner is the parent page's
+      // class title, or every class its Declarations section declares.
+      assert.deepEqual(names("CiSampleMA::Create"), [{ page_id: "mql5/cisamplemacreate", kind: "member", member: 1, anchor: null }]);
+      assert.deepEqual(names("CSampleArrowUp::Create").map((row) => row.page_id), ["mql5/samplearrowscreate"]);
+      assert.deepEqual(names("CSampleArrowDown::Create").map((row) => row.page_id), ["mql5/samplearrowscreate"]);
+      assert.deepEqual(names("Create").map((row) => [row.page_id, row.member]),
+        [["mql5/cisamplemacreate", 1], ["mql5/samplearrowscreate", 1]]);
+      assert.equal(all("select member from pages where id = 'mql5/samplearrowscreate'")[0].member, 1);
+      assert.deepEqual(names("ISampleList::Count"), [{ page_id: "mql5/isamplelistcount", kind: "member", member: 1, anchor: null }],
+        "a generic interface owns its methods");
       assert.deepEqual(names("ENUM_ORDER_TYPE"), [{ page_id: "mql5/orderproperties", kind: "keyword", member: 0, anchor: "enum_order_type" }]);
       assert.deepEqual(names("Trading").map((row) => row.page_id), ["mql5/ctrade", "mql5/ordersend"]);
       assert.deepEqual(all("select page_id from names where name = 'Trading' order by seq").map((row) => row.page_id),

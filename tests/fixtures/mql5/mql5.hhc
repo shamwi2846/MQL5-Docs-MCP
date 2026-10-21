@@ -1,5 +1,6 @@
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
 <HTML><HEAD><meta name="GENERATOR" content="hand-made test fixture"></HEAD><BODY>
+<OBJECT type="text/site properties"><param name="ImageType" value="Folder"></OBJECT>
 <UL>
 <LI><OBJECT type="text/sitemap"><param name="Name" value="MQL5 Reference"><param name="Local" value="index.htm"></OBJECT>
 <UL>
@@ -32,6 +33,21 @@
     <LI><OBJECT type="text/sitemap"><param name="Name" value="CTrade"><param name="Local" value="ctrade.htm"></OBJECT>
     <UL>
       <LI><OBJECT type="text/sitemap"><param name="Name" value="Buy"><param name="Local" value="ctradebuy.htm"></OBJECT>
+    </UL>
+  </UL>
+  <LI><OBJECT type="text/sitemap"><param name="Name" value="Standard Library"></OBJECT>
+  <UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Sample Moving Average"><param name="Local" value="cisamplema.htm"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Create"><param name="Local" value="cisamplemacreate.htm"></OBJECT>
+    </UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="ISampleList&lt;T&gt;"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Count"><param name="Local" value="isamplelistcount.htm"></OBJECT>
+    </UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="Sample fixed arrows"><param name="Local" value="samplearrows.htm"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Create"><param name="Local" value="samplearrowscreate.htm"></OBJECT>
     </UL>
   </UL>
 </UL>
