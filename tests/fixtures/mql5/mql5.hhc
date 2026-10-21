@@ -17,6 +17,14 @@
     <LI><OBJECT type="text/sitemap"><param name="Name" value="Initialization"></OBJECT>
     <UL>
       <LI><OBJECT type="text/sitemap"><param name="Name" value="CopyRates"><param name="Local" value="matrix_copyrates.htm"></OBJECT>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Copy"><param name="Local" value="matrix_copy.htm"></OBJECT>
+    </UL>
+  </UL>
+  <LI><OBJECT type="text/sitemap"><param name="Name" value="File Classes"></OBJECT>
+  <UL>
+    <LI><OBJECT type="text/sitemap"><param name="Name" value="CFile"></OBJECT>
+    <UL>
+      <LI><OBJECT type="text/sitemap"><param name="Name" value="Copy"><param name="Local" value="cfilecopy.htm"></OBJECT>
     </UL>
   </UL>
   <LI><OBJECT type="text/sitemap"><param name="Name" value="Trade Classes &amp; Helpers"></OBJECT>
