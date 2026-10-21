@@ -14,3 +14,7 @@ Requires Node 24.
 npm ci
 npm test
 ```
+
+`npm run find -- OrderSend "how to read indicator buffer values"` prints exactly what the `mql5_find` tool returns, from the installed index.
+
+The real-docs tests run when `MQL5_DOCS_REFERENCE` points to an unpacked copy of the MQL5 Reference (a folder with `mql5.hhc`, `mql5.hhk` and the pages); otherwise they are skipped.

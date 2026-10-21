@@ -247,6 +247,14 @@ function identifierColumn(headerCells) {
   return exact >= 0 ? exact : headerCells.findIndex((cell) => ENUM_IN_HEADER.test(cell));
 }
 
+// The identifier a table row defines, or null when its table has no
+// authored identifier column.
+export function rowIdentifier(block) {
+  if (block.kind !== "row" || !block.header) return null;
+  const column = identifierColumn(block.header.split(" | ").map((cell) => cell.trim()));
+  return column < 0 ? null : block.text.split(" | ")[column]?.trim() ?? null;
+}
+
 // The section a table sits in starts at the nearest heading or anchored
 // block above it and ends at the next one below. Anchors on table rows mark
 // the rows (each error code, for example), not sections, so they don't count.
@@ -264,7 +272,7 @@ function sectionStart(blocks, firstRow) {
   return { start: -1, otherTable };
 }
 
-function sectionEnd(blocks, start) {
+export function sectionEnd(blocks, start) {
   for (let i = start + 1; i < blocks.length; i++) {
     if (opensSection(blocks[i])) return i;
   }

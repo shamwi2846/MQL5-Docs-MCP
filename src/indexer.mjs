@@ -7,8 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import * as cheerio from "cheerio";
 import { constantCards, pageCard, SECTION_HEADINGS } from "./cards.mjs";
 import { SUMMARY_PAGES } from "./config.mjs";
-
-export const SCHEMA_VERSION = 1;
+import { SCHEMA_VERSION } from "./data.mjs";
 
 const SCHEMA = `
 create table meta (key text primary key, value text not null);
@@ -32,7 +31,10 @@ create virtual table sections using fts5 (page_id unindexed, title, heading, bod
 
 const HEADING_CLASSES = new Set(["p_H2", "p_H3", "p_BoldTitles"]);
 const HEADING_SELECTOR = [...HEADING_CLASSES].map((cls) => `p.${cls}`).join(", ");
-const CLASS_NAME = /^C[A-Z]\w*$/;
+// Standard Library class and interface names: CTrade, CiMA (indicator
+// classes), CHashMap<TKey,TValue>, ICollection<T>.
+const CLASS_NAME = /^(Ci?|I)[A-Z]\w*(<[^>]*>)?$/;
+const ownerOf = (className) => className.replace(/<.*$/, "");
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 const MAX_LABEL = 80;
 
@@ -55,8 +57,8 @@ function decodeEntities(text) {
 }
 
 // Parses the loose HTML Help sitemap syntax of .hhc and .hhk files. Each entry
-// keeps its names, its targets ("file.htm#anchor") and the names of the table
-// of contents entries it is nested under.
+// keeps its names, its targets ("file.htm#anchor"), the names of the table of
+// contents entries it is nested under, and its parent entry's first target.
 export function parseSitemap(text) {
   const entries = [];
   const path = [];
@@ -65,11 +67,17 @@ export function parseSitemap(text) {
     if (match[1] === "/") {
       path.pop();
     } else if (match[1] === "") {
-      path.push(last?.name ?? null);
+      path.push(last);
     } else {
       const params = [...match[0].matchAll(/<param\s+name="(\w+)"\s+value="([^"]*)"/gi)];
       const valuesOf = (key) => params.filter((p) => p[1].toLowerCase() === key).map((p) => decodeEntities(p[2]));
-      last = { name: valuesOf("name")[0] ?? "", targets: valuesOf("local"), parents: path.filter(Boolean) };
+      last = {
+        name: valuesOf("name")[0] ?? "",
+        targets: valuesOf("local"),
+        // The nameless site-properties object can sit above the first entry.
+        parents: path.filter(Boolean).map((entry) => entry.name).filter(Boolean),
+        parentTarget: path.at(-1)?.targets[0] ?? null,
+      };
       entries.push(last);
     }
   }
@@ -192,6 +200,20 @@ function declaredOwners(title, blocks) {
   return [...owners];
 }
 
+// Classes and interfaces declared under a Declaration heading or label
+// ("class CChartObjectArrowCheck : public CChartObjectArrow;"). One page can
+// document several classes.
+function declaredClasses(blocks) {
+  const DECLARATION = /^declarations?$/i;
+  const classes = new Set();
+  blocks.forEach((block, i) => {
+    const labelled = DECLARATION.test(block.heading) || (blocks[i - 1]?.kind === "paragraph" && DECLARATION.test(blocks[i - 1].text));
+    if (block.kind !== "code" || !labelled) return;
+    for (const match of block.text.matchAll(/\b(?:class|interface)\s+((?:Ci?|I)[A-Z]\w*)/g)) classes.add(match[1]);
+  });
+  return [...classes];
+}
+
 function findFile(dir, extension) {
   const file = readdirSync(dir).find((name) => name.toLowerCase().endsWith(extension));
   if (!file) throw new Error(`No ${extension} file in ${dir}`);
@@ -241,14 +263,18 @@ function indexSource(statements, source, dir) {
   };
 
   const files = readdirSync(dir).filter((name) => /\.html?$/i.test(name)).sort();
+  const titles = new Map();
+  const classes = new Map();
   for (const file of files) {
     const id = pageId(source, file);
     const page = parsePage(decodePage(readFileSync(join(dir, file))));
+    titles.set(id, page.title);
+    classes.set(id, declaredClasses(page.blocks));
     const entry = tocByFile.get(file.toLowerCase());
     const breadcrumb = entry ? [...entry.parents, entry.name].join(" > ") : page.title;
     const owners = new Set(page.owners);
     const parent = entry?.parents.at(-1);
-    if (parent && CLASS_NAME.test(parent) && IDENTIFIER.test(page.title)) owners.add(parent);
+    if (parent && CLASS_NAME.test(parent) && IDENTIFIER.test(page.title)) owners.add(ownerOf(parent));
     members.set(id, owners.size > 0);
 
     statements.page.run(id, source, file, page.title, breadcrumb, owners.size > 0 ? 1 : 0);
@@ -260,6 +286,21 @@ function indexSource(statements, source, dir) {
     addName(page.title, id, "title");
     for (const owner of owners) addName(`${owner}::${page.title}`, id, "member");
     for (const keyword of page.keywords) addName(keyword, id, "keyword");
+  }
+
+  // Some methods sit under a descriptive contents entry ("Moving Average",
+  // "Arrows with fixed code") whose page is the class page: the owners are
+  // that page's title (CiMA) or the classes its Declaration section declares.
+  for (const file of files) {
+    const id = pageId(source, file);
+    const entry = tocByFile.get(file.toLowerCase());
+    if (members.get(id) || !entry?.parentTarget || !IDENTIFIER.test(titles.get(id))) continue;
+    const owners = classes.get(pageId(source, splitTarget(entry.parentTarget).file)) ?? [];
+    if (!owners.length) continue;
+    members.set(id, true);
+    statements.pageMember.run(id);
+    statements.nameMember.run(id);
+    for (const owner of owners) addName(`${owner}::${titles.get(id)}`, id, "member");
   }
 
   const pageIds = new Set(files.map((file) => pageId(source, file)));
@@ -347,6 +388,8 @@ export function buildIndex(dbPath, sources, meta = {}) {
       block: db.prepare("insert into blocks values (?, ?, ?, ?, ?, ?, ?, ?)"),
       name: db.prepare("insert into names values (?, ?, ?, ?, ?, ?, ?)"),
       section: db.prepare("insert into sections values (?, ?, ?, ?)"),
+      pageMember: db.prepare("update pages set member = 1 where id = ?"),
+      nameMember: db.prepare("update names set member = 1 where page_id = ?"),
       nextSeq: 0,
     };
     const insertMeta = db.prepare("insert into meta values (?, ?)");

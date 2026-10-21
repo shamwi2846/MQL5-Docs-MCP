@@ -50,6 +50,15 @@ Measured in step 1 of the build order (2026-10-21, this PC, the same docs):
 | Method owners | Declarations on matrix and vector pages | Owners appear only in declarations (`bool matrix::CopyRates(`, `vector vector::NormalizeDouble(`); 114 matrix and vector method pages get owner names this way; a few pages print a mismatched or no owner (ArgSort declares `matrix::Sort(`), none of them clashing with a global function |
 | Baseline names | Names agents looked up in 1.3.x plus the design's hard cases, resolved in the real index and checked by hand | 136 names with their main page in `config/baseline.json` (kinds, values and phrases follow with the cards) |
 
+Measured in steps 2 and 3 (2026-10-21, this PC, the same docs):
+
+| Fact | How it was measured | Result |
+|---|---|---|
+| Cards | Real build with cards | function 1,323, method 2,076, class 163, struct 42, constant 3,650 (877 with a value, 1,596 with an enum); 337 section notes; index about 57.8 MB, built in about 18 to 20 s |
+| Class members | Pages marked as methods, real build | 2,713. Owners come from the contents parent's name (CTrade, CiMA, ICollection<T>), from the declarations printed on the page (matrix::CopyRates), or, under a descriptive contents entry ("Arrows with fixed code", "Basic Class CObject", "OpenCL"), from the classes the parent page declares. Shared titles: Create 104, Type 86, Save 30, Load 30, all methods |
+| Server fixed cost | `tools/list` and `initialize` of the v2 server | 1,690 characters of tool definitions (1.3.18: 24,944) and 551 of instructions (1.3.18: 1,298) |
+| Server speed | v2 over stdio on the real index, three runs | `initialize` 210 to 232 ms after start, `tools/list` 5 ms later, first find (index check included) 315 to 332 ms (1.3.18: 2,300 to 2,770 ms); later find calls of one to three names 5 to 11 ms, six questions together about 90 ms |
+
 ## 2. How this design was reviewed
 
 1. Draft 1: three GPT review rounds plus follow-ups on the fixed lines (23 findings, all fixed).

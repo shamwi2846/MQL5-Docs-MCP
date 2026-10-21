@@ -8,7 +8,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "find": "node src/cli.mjs find"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
