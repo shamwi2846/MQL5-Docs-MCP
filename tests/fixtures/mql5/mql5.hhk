@@ -1,0 +1,9 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML><BODY>
+<UL>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="OrderSend"><param name="Local" value="ordersend.htm"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_ORDER_TYPE"><param name="Local" value="orderproperties.htm#enum_order_type"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="Trading"><param name="Local" value="ordersend.htm"><param name="Local" value="CTrade.htm"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="Missing"><param name="Local" value="nowhere.htm"></OBJECT></LI>
+</UL>
+</BODY></HTML>

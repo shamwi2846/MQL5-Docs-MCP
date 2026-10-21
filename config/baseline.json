@@ -1,0 +1,549 @@
+{
+  "note": "Draft from step 1: names that must exist and their main page, taken from the names agents looked up in 1.3.x plus the design's hard cases. Step 2 adds each name's kind, constant values and the phrases some cards must contain.",
+  "names": [
+    {
+      "name": "OrderSend",
+      "page": "mql5/ordersend"
+    },
+    {
+      "name": "OnTick",
+      "page": "mql5/ontick"
+    },
+    {
+      "name": "OnInit",
+      "page": "mql5/oninit"
+    },
+    {
+      "name": "OnDeinit",
+      "page": "mql5/ondeinit"
+    },
+    {
+      "name": "OnTradeTransaction",
+      "page": "mql5/ontradetransaction"
+    },
+    {
+      "name": "CopyBuffer",
+      "page": "mql5/copybuffer"
+    },
+    {
+      "name": "CopyRates",
+      "page": "mql5/copyrates"
+    },
+    {
+      "name": "iMA",
+      "page": "mql5/ima"
+    },
+    {
+      "name": "Print",
+      "page": "mql5/print"
+    },
+    {
+      "name": "PrintFormat",
+      "page": "mql5/printformat"
+    },
+    {
+      "name": "TRADE_RETCODE_DONE",
+      "page": "mql5/enum_trade_return_codes"
+    },
+    {
+      "name": "ORDER_TYPE_BUY",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "ORDER_FILLING_RETURN",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "ORDER_FILLING_FOK",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "ENUM_ORDER_TYPE",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "ENUM_ORDER_TYPE_FILLING",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "SUNDAY",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "TRADE_ACTION_DEAL",
+      "page": "mql5/enum_trade_request_actions"
+    },
+    {
+      "name": "FONT_ITALIC",
+      "page": "mql5/textsetfont"
+    },
+    {
+      "name": "CTrade",
+      "page": "mql5/ctrade"
+    },
+    {
+      "name": "CTrade::Buy",
+      "page": "mql5/ctradebuy"
+    },
+    {
+      "name": "CTrade::PositionClose",
+      "page": "mql5/ctradepositionclose"
+    },
+    {
+      "name": "MqlTradeRequest",
+      "page": "mql5/mqltraderequest"
+    },
+    {
+      "name": "MqlTradeResult",
+      "page": "mql5/mqltraderesult"
+    },
+    {
+      "name": "MqlTick",
+      "page": "mql5/mqltick"
+    },
+    {
+      "name": "PositionSelectByTicket",
+      "page": "mql5/positionselectbyticket"
+    },
+    {
+      "name": "SymbolInfoDouble",
+      "page": "mql5/symbolinfodouble"
+    },
+    {
+      "name": "SymbolInfoInteger",
+      "page": "mql5/symbolinfointeger"
+    },
+    {
+      "name": "AccountInfoDouble",
+      "page": "mql5/accountinfodouble"
+    },
+    {
+      "name": "GetLastError",
+      "page": "mql5/getlasterror"
+    },
+    {
+      "name": "ERR_SUCCESS",
+      "page": "mql5/errorcodes"
+    },
+    {
+      "name": "PERIOD_M1",
+      "page": "mql5/enum_timeframes"
+    },
+    {
+      "name": "INVALID_HANDLE",
+      "page": "mql5/otherconstants"
+    },
+    {
+      "name": "EMPTY_VALUE",
+      "page": "mql5/otherconstants"
+    },
+    {
+      "name": "Order Properties",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "Trade Server Return Codes",
+      "page": "mql5/enum_trade_return_codes"
+    },
+    {
+      "name": "DynamicModeDecompositionQR",
+      "page": "mql5/dynamicmodedecompositionqr"
+    },
+    {
+      "name": "DatabaseExecute",
+      "page": "mql5/databaseexecute"
+    },
+    {
+      "name": "OrderCheck",
+      "page": "mql5/ordercheck"
+    },
+    {
+      "name": "OrderCalcMargin",
+      "page": "mql5/ordercalcmargin"
+    },
+    {
+      "name": "HistorySelect",
+      "page": "mql5/historyselect"
+    },
+    {
+      "name": "TimeCurrent",
+      "page": "mql5/timecurrent"
+    },
+    {
+      "name": "Bars",
+      "page": "mql5/bars"
+    },
+    {
+      "name": "iBars",
+      "page": "mql5/ibars"
+    },
+    {
+      "name": "ArrayResize",
+      "page": "mql5/arrayresize"
+    },
+    {
+      "name": "StringFormat",
+      "page": "mql5/stringformat"
+    },
+    {
+      "name": "NormalizeDouble",
+      "page": "mql5/normalizedouble"
+    },
+    {
+      "name": "SYMBOL_FILLING_MODE",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "ACCOUNT_MARGIN_MODE_RETAIL_HEDGING",
+      "page": "mql5/accountinformation"
+    },
+    {
+      "name": "POSITION_TICKET",
+      "page": "mql5/positionproperties"
+    },
+    {
+      "name": "HistorySelectByPosition",
+      "page": "mql5/historyselectbyposition"
+    },
+    {
+      "name": "GlobalVariableTemp",
+      "page": "mql5/globalvariabletemp"
+    },
+    {
+      "name": "CalendarValueHistory",
+      "page": "mql5/calendarvaluehistory"
+    },
+    {
+      "name": "GlobalVariablesFlush",
+      "page": "mql5/globalvariablesflush"
+    },
+    {
+      "name": "GlobalVariableSet",
+      "page": "mql5/globalvariableset"
+    },
+    {
+      "name": "Symbol Properties",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "REASON_RECOMPILE",
+      "page": "mql5/uninit"
+    },
+    {
+      "name": "POSITION_IDENTIFIER",
+      "page": "mql5/positionproperties"
+    },
+    {
+      "name": "HistoryOrderSelect",
+      "page": "mql5/historyorderselect"
+    },
+    {
+      "name": "HistoryDealGetInteger",
+      "page": "mql5/historydealgetinteger"
+    },
+    {
+      "name": "GlobalVariableGet",
+      "page": "mql5/globalvariableget"
+    },
+    {
+      "name": "TimeTradeServer",
+      "page": "mql5/timetradeserver"
+    },
+    {
+      "name": "TesterStop",
+      "page": "mql5/testerstop"
+    },
+    {
+      "name": "PositionSelect",
+      "page": "mql5/positionselect"
+    },
+    {
+      "name": "PositionModify",
+      "page": "mql5/ctradepositionmodify"
+    },
+    {
+      "name": "PositionGetString",
+      "page": "mql5/positiongetstring"
+    },
+    {
+      "name": "PositionGetInteger",
+      "page": "mql5/positiongetinteger"
+    },
+    {
+      "name": "OrderCalcProfit",
+      "page": "mql5/ordercalcprofit"
+    },
+    {
+      "name": "GlobalVariableTime",
+      "page": "mql5/globalvariabletime"
+    },
+    {
+      "name": "GlobalVariableSetOnCondition",
+      "page": "mql5/globalvariablesetoncondition"
+    },
+    {
+      "name": "GlobalVariableDel",
+      "page": "mql5/globalvariabledel"
+    },
+    {
+      "name": "GetTickCount64",
+      "page": "mql5/gettickcount64"
+    },
+    {
+      "name": "FileMove",
+      "page": "mql5/filemove"
+    },
+    {
+      "name": "sinput",
+      "page": "mql5/inputvariables"
+    },
+    {
+      "name": "iTime",
+      "page": "mql5/itime"
+    },
+    {
+      "name": "iBarShift",
+      "page": "mql5/ibarshift"
+    },
+    {
+      "name": "iATR",
+      "page": "mql5/iatr"
+    },
+    {
+      "name": "iADX",
+      "page": "mql5/iadx"
+    },
+    {
+      "name": "Uninitialization Reason Codes",
+      "page": "mql5/uninit"
+    },
+    {
+      "name": "TimeToStruct",
+      "page": "mql5/timetostruct"
+    },
+    {
+      "name": "Testing Trading Strategies",
+      "page": "mql5/testing"
+    },
+    {
+      "name": "TRADE_TRANSACTION_REQUEST",
+      "page": "mql5/enum_trade_transaction_type"
+    },
+    {
+      "name": "TRADE_RETCODE_MARKET_CLOSED",
+      "page": "mql5/enum_trade_return_codes"
+    },
+    {
+      "name": "TERMINAL_MAXBARS",
+      "page": "mql5/terminalstatus"
+    },
+    {
+      "name": "SymbolInfoTick",
+      "page": "mql5/symbolinfotick"
+    },
+    {
+      "name": "SymbolInfoSessionTrade",
+      "page": "mql5/symbolinfosessiontrade"
+    },
+    {
+      "name": "SYMBOL_VOLUME_STEP",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SYMBOL_VOLUME_MIN",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SYMBOL_VOLUME_LIMIT",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SYMBOL_TRADE_TICK_VALUE_LOSS",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SYMBOL_TRADE_EXEMODE",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SYMBOL_ORDER_GTC_MODE",
+      "page": "mql5/marketinfoconstants"
+    },
+    {
+      "name": "SERIES_LASTBAR_DATE",
+      "page": "mql5/enum_series_info_integer"
+    },
+    {
+      "name": "SERIES_FIRSTDATE",
+      "page": "mql5/enum_series_info_integer"
+    },
+    {
+      "name": "ResultRetcode",
+      "page": "mql5/ctraderesultretcode"
+    },
+    {
+      "name": "PositionGetTicket",
+      "page": "mql5/positiongetticket"
+    },
+    {
+      "name": "PositionGetDouble",
+      "page": "mql5/positiongetdouble"
+    },
+    {
+      "name": "PositionClose",
+      "page": "mql5/ctradepositionclose"
+    },
+    {
+      "name": "Position Properties",
+      "page": "mql5/positionproperties"
+    },
+    {
+      "name": "ParameterSetRange",
+      "page": "mql5/parametersetrange"
+    },
+    {
+      "name": "POSITION_SWAP",
+      "page": "mql5/positionproperties"
+    },
+    {
+      "name": "POSITION_PROFIT",
+      "page": "mql5/positionproperties"
+    },
+    {
+      "name": "OrderGetString",
+      "page": "mql5/ordergetstring"
+    },
+    {
+      "name": "OrderGetInteger",
+      "page": "mql5/ordergetinteger"
+    },
+    {
+      "name": "OnTimer",
+      "page": "mql5/ontimer"
+    },
+    {
+      "name": "ORDER_TIME_SPECIFIED_DAY",
+      "page": "mql5/orderproperties"
+    },
+    {
+      "name": "MathSrand",
+      "page": "mql5/mathsrand"
+    },
+    {
+      "name": "MathRand",
+      "page": "mql5/mathrand"
+    },
+    {
+      "name": "MQL_VISUAL_MODE",
+      "page": "mql5/mql5_programm_info"
+    },
+    {
+      "name": "MQL_PROGRAM_NAME",
+      "page": "mql5/mql5_programm_info"
+    },
+    {
+      "name": "INIT_SUCCEEDED",
+      "page": "mql5/events"
+    },
+    {
+      "name": "HistoryOrderGetInteger",
+      "page": "mql5/historyordergetinteger"
+    },
+    {
+      "name": "HistoryDealGetTicket",
+      "page": "mql5/historydealgetticket"
+    },
+    {
+      "name": "HistoryDealGetDouble",
+      "page": "mql5/historydealgetdouble"
+    },
+    {
+      "name": "GlobalVariableCheck",
+      "page": "mql5/globalvariablecheck"
+    },
+    {
+      "name": "FileOpen",
+      "page": "mql5/fileopen"
+    },
+    {
+      "name": "FileIsExist",
+      "page": "mql5/fileisexist"
+    },
+    {
+      "name": "File Opening Flags",
+      "page": "mql5/fileflags"
+    },
+    {
+      "name": "FILE_REWRITE",
+      "page": "mql5/fileflags"
+    },
+    {
+      "name": "EventSetTimer",
+      "page": "mql5/eventsettimer"
+    },
+    {
+      "name": "Deal Properties",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "Datetime Type",
+      "page": "mql5/datetime"
+    },
+    {
+      "name": "DEAL_TYPE_COMMISSION",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_TAX",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_PROFIT",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_POSITION_ID",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_FEE",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_ENTRY_OUT_BY",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_ENTRY_IN",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_DIVIDEND",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "DEAL_COMMISSION",
+      "page": "mql5/dealproperties"
+    },
+    {
+      "name": "CalendarEventById",
+      "page": "mql5/calendareventbyid"
+    },
+    {
+      "name": "ArrayCopy",
+      "page": "mql5/arraycopy"
+    },
+    {
+      "name": "ACCOUNT_LIMIT_ORDERS",
+      "page": "mql5/accountinformation"
+    },
+    {
+      "name": "ACCOUNT_HEDGE_ALLOWED",
+      "page": "mql5/accountinformation"
+    },
+    {
+      "name": "ACCOUNT_FIFO_CLOSE",
+      "page": "mql5/accountinformation"
+    }
+  ]
+}
