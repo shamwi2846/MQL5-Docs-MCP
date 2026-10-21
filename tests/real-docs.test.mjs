@@ -10,6 +10,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { checkBaseline } from "../src/checks.mjs";
+import { loadBaseline } from "../src/config.mjs";
 import { buildIndex } from "../src/indexer.mjs";
 import { missingFromCard } from "./helpers.mjs";
 
@@ -51,6 +53,15 @@ test("real docs: the sample cards are complete", { skip }, () => {
     for (const phrase of phrases) assert.ok(card.full.includes(phrase), `${pageId} contains "${phrase}"`);
     assert.ok(card.brief.length <= 380, `${pageId} brief is ${card.brief.length} characters`);
   }
+});
+
+test("real docs: every baseline name resolves with its kind, value, enum and phrases", { skip }, () => {
+  assert.deepEqual(checkBaseline(db, loadBaseline()), []);
+});
+
+test("real docs: a comparison column defines no constants", { skip }, () => {
+  const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
+  assert.equal(count, 0);
 });
 
 test("real docs: briefs keep their signature or a read pointer", { skip }, () => {

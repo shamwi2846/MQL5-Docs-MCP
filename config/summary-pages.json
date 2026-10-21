@@ -1,0 +1,4 @@
+{
+  "note": "Pages whose tables repeat constants defined elsewhere. They stay searchable by title but never produce cards and are never a constant's main page.",
+  "pages": ["mql5/constant_indices"]
+}
