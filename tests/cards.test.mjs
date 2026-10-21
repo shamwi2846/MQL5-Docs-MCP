@@ -195,7 +195,7 @@ test("buildIndex stores complete cards and links See also only when it is clear"
 
       // Every card built from the sample HTML carries all of its page's text.
       const blocksOf = db.prepare("select kind, text, heading, table_no as tableNo, header from blocks where page_id = ? order by pos");
-      for (const stored of db.prepare("select page_id, kind, full from cards").all()) {
+      for (const stored of db.prepare("select page_id, kind, full from cards where kind <> 'constant'").all()) {
         assert.deepEqual(missingFromCard(stored, blocksOf.all(stored.page_id)), [], stored.page_id);
       }
     } finally {

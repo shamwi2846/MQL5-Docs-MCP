@@ -5,7 +5,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import * as cheerio from "cheerio";
-import { pageCard, SECTION_HEADINGS } from "./cards.mjs";
+import { constantCards, pageCard, SECTION_HEADINGS } from "./cards.mjs";
+import { SUMMARY_PAGES } from "./config.mjs";
 
 export const SCHEMA_VERSION = 1;
 
@@ -14,8 +15,10 @@ create table meta (key text primary key, value text not null);
 create table pages (id text primary key, source text not null, file text not null,
   title text not null, breadcrumb text not null, member integer not null);
 create table cards (name text not null, page_id text not null, kind text not null,
-  full text not null, brief text not null);
+  anchor text, value text, enum text, notes_key text, full text not null, brief text not null);
 create index cards_by_page on cards (page_id);
+create index cards_by_name on cards (name);
+create table notes (key text primary key, text text not null) without rowid;
 create table blocks (page_id text not null, pos integer not null, kind text not null,
   text text not null, heading text not null, table_no integer, header text, anchors text,
   primary key (page_id, pos)) without rowid;
@@ -275,8 +278,19 @@ function buildCards(db) {
   const candidates = db.prepare(`select n.page_id, n.member, p.title = n.name as titled
     from names n join pages p on p.id = n.page_id where n.name = ?`);
   const ownersOf = db.prepare("select name from names where page_id = ? and kind = 'member'");
-  const blocksOf = db.prepare("select kind, text, heading, table_no as tableNo, header from blocks where page_id = ? order by pos");
-  const insertCard = db.prepare("insert into cards values (?, ?, ?, ?, ?)");
+  const blocksOf = db.prepare(`select kind, text, heading, table_no as tableNo, header, anchors
+    from blocks where page_id = ? order by pos`);
+  const insertCard = db.prepare("insert into cards values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const insertNote = db.prepare("insert or ignore into notes values (?, ?)");
+  const enumOfAnchorOn = db.prepare("select name from names where page_id = ? and anchor = ? and name like 'ENUM!_%' escape '!'");
+  // Enums the keyword index points at the page itself; an enum that also has
+  // an anchored definition on the page belongs to that section, not the page.
+  const enumsOfPage = db.prepare(`select distinct name from names
+    where page_id = ?1 and anchor is null and name like 'ENUM!_%' escape '!'
+      and name not in (select name from names where page_id = ?1 and anchor is not null)`);
+  const hasName = db.prepare("select 1 from names where name = ? and page_id = ?");
+  const insertName = db.prepare("insert into names values (?, ?, ?, 'constant', 0, ?, ?)");
+  let seq = db.prepare("select coalesce(max(seq), -1) + 1 as next from names").get().next;
 
   // A See also name links to a page only when that page is clear: the
   // current page's own owner first ("Copy" on a matrix page is matrix::Copy,
@@ -297,9 +311,27 @@ function buildCards(db) {
   };
 
   for (const page of db.prepare("select id, title, member from pages").all()) {
+    if (SUMMARY_PAGES.has(page.id)) continue;
+    const blocks = blocksOf.all(page.id).map((block) => ({ ...block, anchors: block.anchors ? block.anchors.split(" ") : [] }));
     const owners = ownersOf.all(page.id).map((row) => row.name.split("::")[0]);
-    const card = pageCard(page, blocksOf.all(page.id), resolveFor(owners, page.id));
-    if (card) insertCard.run(card.name, page.id, card.kind, card.full, card.brief);
+    const card = pageCard(page, blocks, resolveFor(owners, page.id));
+    if (card) insertCard.run(card.name, page.id, card.kind, null, null, null, null, card.full, card.brief);
+
+    // One card per constant and page; a constant repeated on the same page keeps its first row.
+    const enumOfAnchor = (anchor) => {
+      if (anchor) return enumOfAnchorOn.get(page.id, anchor)?.name ?? null;
+      const pageEnums = enumsOfPage.all(page.id);
+      return pageEnums.length === 1 ? pageEnums[0].name : null;
+    };
+    const seen = new Set();
+    for (const constant of constantCards(page, blocks, enumOfAnchor)) {
+      if (seen.has(constant.name)) continue;
+      seen.add(constant.name);
+      insertCard.run(constant.name, page.id, "constant", constant.anchor, constant.value, constant.enum,
+        constant.notesKey, constant.full, constant.brief);
+      if (constant.notesKey) insertNote.run(constant.notesKey, constant.notes);
+      if (!hasName.get(constant.name, page.id)) insertName.run(constant.name, constant.name.toLowerCase(), page.id, constant.anchor, seq++);
+    }
   }
 }
 

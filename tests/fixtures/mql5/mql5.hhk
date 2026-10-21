@@ -3,6 +3,10 @@
 <UL>
 <LI><OBJECT type="text/sitemap"><param name="Name" value="OrderSend"><param name="Local" value="ordersend.htm"></OBJECT></LI>
 <LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_ORDER_TYPE"><param name="Local" value="orderproperties.htm#enum_order_type"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_ORDER_TYPE_FILLING"><param name="Local" value="orderproperties.htm#enum_order_type_filling"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_ORDER_TYPE_TIME"><param name="Local" value="orderproperties.htm#enum_order_type_time"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_DAY_SAMPLE"><param name="Local" value="enum_day_sample.htm"></OBJECT></LI>
+<LI><OBJECT type="text/sitemap"><param name="Name" value="ENUM_SAMPLE_CRYPT"><param name="Local" value="enum_trade_return_codes.htm#enum_sample_crypt"></OBJECT></LI>
 <LI><OBJECT type="text/sitemap"><param name="Name" value="Trading"><param name="Local" value="ordersend.htm"><param name="Local" value="CTrade.htm"></OBJECT></LI>
 <LI><OBJECT type="text/sitemap"><param name="Name" value="Missing"><param name="Local" value="nowhere.htm"></OBJECT></LI>
 </UL>

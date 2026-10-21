@@ -231,6 +231,122 @@ function structCard(page, blocks, resolveName, name, definition) {
   };
 }
 
+const IDENTIFIER_HEADERS = new Set(["id", "identifier", "constant", "flag"]);
+const VALUE_HEADERS = new Set(["value", "code"]);
+const CONSTANT = /^[A-Z][A-Z0-9_]+$/;
+const ENUM_IN_HEADER = /\bENUM_[A-Z0-9_]+\b/;
+const MAX_SIBLINGS = 10;
+const MAX_VALUE = 24;
+
+// The authored identifier column of a table: headed "ID", "Identifier",
+// "Constant" or "Flag", or a header naming an enum ("The value in
+// ENUM_ORDER_TYPE_FILLING"). Other columns never define constants, even when
+// their cells look like constants (Direct3D names in a comparison column).
+function identifierColumn(headerCells) {
+  const exact = headerCells.findIndex((cell) => IDENTIFIER_HEADERS.has(cell.toLowerCase()));
+  return exact >= 0 ? exact : headerCells.findIndex((cell) => ENUM_IN_HEADER.test(cell));
+}
+
+// The section a table sits in starts at the nearest heading or anchored
+// block above it and ends at the next one below. Anchors on table rows mark
+// the rows (each error code, for example), not sections, so they don't count.
+const opensSection = (block) => block.kind === "heading" || (block.kind !== "row" && block.anchors?.length > 0);
+
+// Returns the start index, or -1 when the table opens the page, and whether
+// another table comes before it in the section.
+function sectionStart(blocks, firstRow) {
+  let otherTable = false;
+  for (let i = firstRow - 1; i >= 0; i--) {
+    const block = blocks[i];
+    if (opensSection(block)) return { start: i, otherTable };
+    if (block.kind === "row" && block.tableNo !== blocks[firstRow].tableNo) otherTable = true;
+  }
+  return { start: -1, otherTable };
+}
+
+function sectionEnd(blocks, start) {
+  for (let i = start + 1; i < blocks.length; i++) {
+    if (opensSection(blocks[i])) return i;
+  }
+  return blocks.length;
+}
+
+// Cards for the constants of a page, one per identifier row. Each keeps its
+// value (only from a "Value" or "Code" column, never from row order), the
+// row's other cells as its description, its enum when the page names it (the
+// column header, or the keyword-index anchor that opens the table's section),
+// up to ten siblings, and the key of its section's notes: the prose around
+// the table, which can change a row's meaning (ORDER_FILLING_RETURN's row
+// forbids Market Execution; the notes allow it for pending orders).
+export function constantCards(page, blocks, enumOfAnchor) {
+  const cards = [];
+  const tables = new Map();
+  blocks.forEach((block, index) => {
+    if (block.kind !== "row" || !block.header) return;
+    if (!tables.has(block.tableNo)) tables.set(block.tableNo, []);
+    tables.get(block.tableNo).push(index);
+  });
+  for (const rows of tables.values()) {
+    const headerCells = blocks[rows[0]].header.split(" | ").map((cell) => cell.trim());
+    const idColumn = identifierColumn(headerCells);
+    if (idColumn < 0) continue;
+    const valueColumn = headerCells.findIndex((cell) => VALUE_HEADERS.has(cell.toLowerCase()));
+    const entries = rows.map((index) => ({ index, cells: blocks[index].text.split(" | ").map((cell) => cell.trim()) }))
+      .filter(({ cells }) => CONSTANT.test(cells[idColumn] ?? ""));
+    if (!entries.length) continue;
+
+    const { start, otherTable } = sectionStart(blocks, rows[0]);
+    const end = sectionEnd(blocks, start);
+    // The enum comes from the column header, from the keyword-index anchor that
+    // opens the table's section, or, for a table that opens a page wholly about
+    // one enum (Chart Timeframes), from the enum the keyword index points at
+    // the page itself (enumOfAnchor(null) answers only when there is one).
+    const headerEnum = ENUM_IN_HEADER.exec(headerCells[idColumn])?.[0];
+    const sectionAnchors = start >= 0 ? blocks[start].anchors ?? [] : [];
+    let anchorEnum;
+    if (!otherTable && sectionAnchors.length) anchorEnum = sectionAnchors.map((anchor) => enumOfAnchor(anchor)).find(Boolean);
+    else if (!otherTable && start < 0) anchorEnum = enumOfAnchor(null);
+    // Section notes: the section's paragraphs, without a bare "ENUM_X" label.
+    const from = Math.max(start, 0);
+    const notes = blocks.slice(from, end)
+      .filter((block) => block.kind === "paragraph" && !/^ENUM_[A-Z0-9_]+$/.test(block.text.trim()))
+      .map((block) => block.text);
+    const notesKey = notes.length ? `${page.id}#${from}` : null;
+    const names = entries.map(({ cells }) => cells[idColumn]);
+
+    for (const { index, cells } of entries) {
+      const name = cells[idColumn];
+      const value = valueColumn >= 0 && cells[valueColumn] && cells[valueColumn].length <= MAX_VALUE ? cells[valueColumn] : null;
+      // A "Description" cell reads as is; other cells keep their column's label
+      // ("Fill policy: Return", "Match in D3D11_PRIMITIVE_TOPOLOGY: ...").
+      const description = cells.map((cell, column) => {
+        if (column === idColumn || column === valueColumn || !cell) return null;
+        const label = headerCells[column];
+        return !label || /^description$/i.test(label) ? cell : `${label}: ${cell}`;
+      }).filter(Boolean).join(" — ");
+      const siblings = names.filter((other) => other !== name);
+      const lines = [description];
+      if (siblings.length) {
+        const more = siblings.length > MAX_SIBLINGS ? ` (+${siblings.length - MAX_SIBLINGS} more: mql5_read id=${page.id} focus=${names[0]})` : "";
+        lines.push(`Other values: ${siblings.slice(0, MAX_SIBLINGS).join(", ")}${more}`);
+      }
+      lines.push(`More: mql5_read id=${page.id} focus=${name}`);
+      cards.push({
+        name,
+        kind: "constant",
+        anchor: blocks[index].anchors?.[0] ?? blocks[start]?.anchors?.[0] ?? null,
+        value,
+        enum: headerEnum ?? anchorEnum ?? null,
+        notesKey,
+        notes: notes.join("\n"),
+        full: lines.filter(Boolean).join("\n"),
+        brief: description ? firstSentence(description) : `More: mql5_read id=${page.id} focus=${name}`,
+      });
+    }
+  }
+  return cards;
+}
+
 // The card of a whole page, or null for pages that are not a function,
 // method, class or struct (find shows their best passage instead). A struct
 // page is one whose first code block is the struct's definition.

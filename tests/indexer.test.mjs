@@ -51,11 +51,12 @@ test("parsePage keeps anchors and table header rows", () => {
   const page = fixturePage("orderproperties.htm");
   const enumName = page.blocks.find((block) => block.text === "ENUM_ORDER_TYPE");
   assert.deepEqual(enumName.anchors, ["enum_order_type"]);
-  const rows = page.blocks.filter((block) => block.kind === "row");
+  const rows = page.blocks.filter((block) => block.kind === "row" && block.tableNo === 1);
   assert.deepEqual(rows.map((row) => row.text), ["ORDER_TYPE_BUY | Sample buy order", "ORDER_TYPE_SELL | Sample sell order"]);
-  assert.ok(rows.every((row) => row.header === "Identifier | Description" && row.tableNo === 1));
+  assert.ok(rows.every((row) => row.header === "Identifier | Description"));
   assert.deepEqual(rows.map((row) => row.anchors), [[], ["order_type_sell"]], "an anchor inside a row stays on that row");
-  assert.equal(page.blocks.at(-1).text, "Sample notes after the table.");
+  const after = page.blocks[page.blocks.indexOf(rows.at(-1)) + 1];
+  assert.equal(after.text, "Sample notes after the table.");
 });
 
 test("parsePage reads method owners from the declarations only", () => {
@@ -80,8 +81,8 @@ test("buildIndex stores pages, blocks, names and searchable sections", () => {
     try {
       const all = (sql, ...args) => db.prepare(sql).all(...args);
       assert.deepEqual(all("select id from pages order by id").map((row) => row.id),
-        ["mql5/cfilecopy", "mql5/copyrates", "mql5/ctrade", "mql5/ctradebuy", "mql5/matrix_copy", "mql5/matrix_copyrates",
-          "mql5/orderproperties", "mql5/ordersend"]);
+        ["mql5/cfilecopy", "mql5/constant_indices", "mql5/copyrates", "mql5/ctrade", "mql5/ctradebuy", "mql5/enum_day_sample",
+          "mql5/enum_trade_return_codes", "mql5/matrix_copy", "mql5/matrix_copyrates", "mql5/orderproperties", "mql5/ordersend"]);
       assert.equal(all("select breadcrumb from pages where id = 'mql5/ctradebuy'")[0].breadcrumb,
         "MQL5 Reference > Trade Classes & Helpers > CTrade > Buy");
 
