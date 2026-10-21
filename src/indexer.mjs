@@ -5,13 +5,17 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import * as cheerio from "cheerio";
+import { pageCard, SECTION_HEADINGS } from "./cards.mjs";
 
 export const SCHEMA_VERSION = 1;
 
 const SCHEMA = `
 create table meta (key text primary key, value text not null);
 create table pages (id text primary key, source text not null, file text not null,
-  title text not null, breadcrumb text not null);
+  title text not null, breadcrumb text not null, member integer not null);
+create table cards (name text not null, page_id text not null, kind text not null,
+  full text not null, brief text not null);
+create index cards_by_page on cards (page_id);
 create table blocks (page_id text not null, pos integer not null, kind text not null,
   text text not null, heading text not null, table_no integer, header text, anchors text,
   primary key (page_id, pos)) without rowid;
@@ -25,7 +29,6 @@ create virtual table sections using fts5 (page_id unindexed, title, heading, bod
 
 const HEADING_CLASSES = new Set(["p_H2", "p_H3", "p_BoldTitles"]);
 const HEADING_SELECTOR = [...HEADING_CLASSES].map((cls) => `p.${cls}`).join(", ");
-const SECTION_HEADINGS = new Set(["Parameters", "Return Value", "Note", "See also"]);
 const CLASS_NAME = /^C[A-Z]\w*$/;
 const IDENTIFIER = /^[A-Za-z_]\w*$/;
 const MAX_LABEL = 80;
@@ -245,7 +248,7 @@ function indexSource(statements, source, dir) {
     if (parent && CLASS_NAME.test(parent) && IDENTIFIER.test(page.title)) owners.add(parent);
     members.set(id, owners.size > 0);
 
-    statements.page.run(id, source, file, page.title, breadcrumb);
+    statements.page.run(id, source, file, page.title, breadcrumb, owners.size > 0 ? 1 : 0);
     page.blocks.forEach((block, pos) => statements.block.run(id, pos, block.kind, block.text, block.heading,
       block.tableNo, block.header, block.anchors.length ? block.anchors.join(" ") : null));
     for (const section of sectionsOf(page.blocks)) {
@@ -266,6 +269,40 @@ function indexSource(statements, source, dir) {
   }
 }
 
+// Cards are built once every page and name is stored, because See also
+// entries are resolved to page ids through the names.
+function buildCards(db) {
+  const candidates = db.prepare(`select n.page_id, n.member, p.title = n.name as titled
+    from names n join pages p on p.id = n.page_id where n.name = ?`);
+  const ownersOf = db.prepare("select name from names where page_id = ? and kind = 'member'");
+  const blocksOf = db.prepare("select kind, text, heading, table_no as tableNo, header from blocks where page_id = ? order by pos");
+  const insertCard = db.prepare("insert into cards values (?, ?, ?, ?, ?)");
+
+  // A See also name links to a page only when that page is clear: the
+  // current page's own owner first ("Copy" on a matrix page is matrix::Copy,
+  // but never the page itself), then a single page, then a single global page
+  // with that title. An ambiguous name stays unlinked rather than pointing at
+  // the wrong page.
+  const unique = (ids) => [...new Set(ids)];
+  const resolveFor = (owners, selfId) => (name) => {
+    for (const owner of owners) {
+      const own = unique(candidates.all(`${owner}::${name}`).map((row) => row.page_id)).filter((id) => id !== selfId);
+      if (own.length === 1) return own[0];
+    }
+    const rows = candidates.all(name);
+    const pages = unique(rows.map((row) => row.page_id));
+    if (pages.length === 1) return pages[0];
+    const global = unique(rows.filter((row) => row.titled && !row.member).map((row) => row.page_id));
+    return global.length === 1 ? global[0] : null;
+  };
+
+  for (const page of db.prepare("select id, title, member from pages").all()) {
+    const owners = ownersOf.all(page.id).map((row) => row.name.split("::")[0]);
+    const card = pageCard(page, blocksOf.all(page.id), resolveFor(owners, page.id));
+    if (card) insertCard.run(card.name, page.id, card.kind, card.full, card.brief);
+  }
+}
+
 // Builds a new index file from unpacked sources ({ source, dir } each, with
 // source "mql5", "book" or "nn") in one transaction, then compacts the
 // full-text index once. A failure rolls everything back.
@@ -274,7 +311,7 @@ export function buildIndex(dbPath, sources, meta = {}) {
   try {
     db.exec(SCHEMA);
     const statements = {
-      page: db.prepare("insert into pages values (?, ?, ?, ?, ?)"),
+      page: db.prepare("insert into pages values (?, ?, ?, ?, ?, ?)"),
       block: db.prepare("insert into blocks values (?, ?, ?, ?, ?, ?, ?, ?)"),
       name: db.prepare("insert into names values (?, ?, ?, ?, ?, ?, ?)"),
       section: db.prepare("insert into sections values (?, ?, ?, ?)"),
@@ -284,6 +321,7 @@ export function buildIndex(dbPath, sources, meta = {}) {
     db.exec("begin");
     try {
       for (const { source, dir } of sources) indexSource(statements, source, dir);
+      buildCards(db);
       db.exec("insert into sections (sections) values ('optimize')");
       for (const [key, value] of Object.entries({ schema_version: SCHEMA_VERSION, ...meta })) {
         insertMeta.run(key, String(value));

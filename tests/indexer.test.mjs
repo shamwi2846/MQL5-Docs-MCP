@@ -30,7 +30,7 @@ test("parsePage turns a function page into ordered blocks", () => {
   assert.deepEqual(page.keywords, ["OrderSend", "MqlTradeRequest"]);
   assert.deepEqual(page.blocks.map((block) => block.kind),
     ["paragraph", "code", "heading", "paragraph", "paragraph", "heading", "paragraph", "paragraph", "paragraph",
-      "paragraph", "heading", "paragraph", "paragraph", "paragraph"]);
+      "paragraph", "heading", "paragraph", "paragraph", "paragraph", "heading", "paragraph"]);
   assert.equal(page.blocks[0].text, "Sends a sample trade request to the trade server.");
   assert.equal(page.blocks[1].text,
     "bool  OrderSend(\n   MqlTradeRequest& request,  // what to do\n   MqlTradeResult&  result\n   );");
@@ -42,7 +42,8 @@ test("parsePage turns a function page into ordered blocks", () => {
     ["Return Value", "- 0, if it passes."],
     ["Return Value", "- a nested detail"],
   ], "list items, including nested ones, are kept under their heading");
-  assert.deepEqual(page.blocks.slice(-2).map((block) => block.text), ["1. Send the request.", "2. Read the result."]);
+  assert.deepEqual(page.blocks.slice(11, 14).map((block) => block.text),
+    ["Check the result structure after every call.", "1. Send the request.", "2. Read the result."]);
   assert.ok(!page.blocks.some((block) => block.text.includes("MQL5 Reference")), "navigation outside #help is skipped");
 });
 
@@ -79,7 +80,8 @@ test("buildIndex stores pages, blocks, names and searchable sections", () => {
     try {
       const all = (sql, ...args) => db.prepare(sql).all(...args);
       assert.deepEqual(all("select id from pages order by id").map((row) => row.id),
-        ["mql5/copyrates", "mql5/ctrade", "mql5/ctradebuy", "mql5/matrix_copyrates", "mql5/orderproperties", "mql5/ordersend"]);
+        ["mql5/cfilecopy", "mql5/copyrates", "mql5/ctrade", "mql5/ctradebuy", "mql5/matrix_copy", "mql5/matrix_copyrates",
+          "mql5/orderproperties", "mql5/ordersend"]);
       assert.equal(all("select breadcrumb from pages where id = 'mql5/ctradebuy'")[0].breadcrumb,
         "MQL5 Reference > Trade Classes & Helpers > CTrade > Buy");
 
@@ -100,7 +102,7 @@ test("buildIndex stores pages, blocks, names and searchable sections", () => {
       assert.equal(names("Missing").length, 0, "keyword targets without a page are skipped");
       assert.equal(all("select page_id from names where lower = 'ordersend'")[0].page_id, "mql5/ordersend");
 
-      assert.equal(all("select count(*) as n from blocks where page_id = 'mql5/ordersend'")[0].n, 14);
+      assert.equal(all("select count(*) as n from blocks where page_id = 'mql5/ordersend'")[0].n, 16);
       const hits = all("select page_id, heading from sections where sections match ? order by rank", '"executed"');
       assert.deepEqual(hits.map((row) => ({ ...row })), [{ page_id: "mql5/ordersend", heading: "Return Value" }]);
       assert.equal(all("select value from meta where key = 'schema_version'")[0].value, String(SCHEMA_VERSION));
