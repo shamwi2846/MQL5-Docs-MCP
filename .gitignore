@@ -1,0 +1,6 @@
+node_modules/
+# Local docs data: MetaQuotes content must never be committed.
+data/
+*.chm
+*.sqlite
+*.sqlite-journal

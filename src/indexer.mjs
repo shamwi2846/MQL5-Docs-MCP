@@ -1,0 +1,299 @@
+// Builds the SQLite index from unpacked CHM folders: pages, their block
+// structure, full-text sections and the names that find each page.
+// Only this module loads the HTML parser; the server never imports it.
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import * as cheerio from "cheerio";
+
+export const SCHEMA_VERSION = 1;
+
+const SCHEMA = `
+create table meta (key text primary key, value text not null);
+create table pages (id text primary key, source text not null, file text not null,
+  title text not null, breadcrumb text not null);
+create table blocks (page_id text not null, pos integer not null, kind text not null,
+  text text not null, heading text not null, table_no integer, header text, anchors text,
+  primary key (page_id, pos)) without rowid;
+create table names (name text not null, lower text not null, page_id text not null,
+  kind text not null, member integer not null, anchor text, seq integer not null);
+create index names_by_name on names (name);
+create index names_by_lower on names (lower);
+create virtual table sections using fts5 (page_id unindexed, title, heading, body,
+  tokenize = 'unicode61 remove_diacritics 2');
+`;
+
+const HEADING_CLASSES = new Set(["p_H2", "p_H3", "p_BoldTitles"]);
+const HEADING_SELECTOR = [...HEADING_CLASSES].map((cls) => `p.${cls}`).join(", ");
+const SECTION_HEADINGS = new Set(["Parameters", "Return Value", "Note", "See also"]);
+const CLASS_NAME = /^C[A-Z]\w*$/;
+const IDENTIFIER = /^[A-Za-z_]\w*$/;
+const MAX_LABEL = 80;
+
+export function normalizeSpace(text) {
+  return text.replace(/[\s ]+/g, " ").trim();
+}
+
+// Pages declare their charset (Windows-1252 or ISO-8859-1 today); an unknown
+// label throws, so a changed encoding fails the build instead of garbling text.
+export function decodePage(bytes) {
+  const head = bytes.subarray(0, 2048).toString("latin1");
+  const charset = /charset=["']?([\w-]+)/i.exec(head)?.[1] ?? "windows-1252";
+  return new TextDecoder(charset).decode(bytes);
+}
+
+function decodeEntities(text) {
+  return text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+// Parses the loose HTML Help sitemap syntax of .hhc and .hhk files. Each entry
+// keeps its names, its targets ("file.htm#anchor") and the names of the table
+// of contents entries it is nested under.
+export function parseSitemap(text) {
+  const entries = [];
+  const path = [];
+  let last = null;
+  for (const match of text.matchAll(/<(\/?)ul\b[^>]*>|<object\b[\s\S]*?<\/object>/gi)) {
+    if (match[1] === "/") {
+      path.pop();
+    } else if (match[1] === "") {
+      path.push(last?.name ?? null);
+    } else {
+      const params = [...match[0].matchAll(/<param\s+name="(\w+)"\s+value="([^"]*)"/gi)];
+      const valuesOf = (key) => params.filter((p) => p[1].toLowerCase() === key).map((p) => decodeEntities(p[2]));
+      last = { name: valuesOf("name")[0] ?? "", targets: valuesOf("local"), parents: path.filter(Boolean) };
+      entries.push(last);
+    }
+  }
+  return entries;
+}
+
+// Code lines are separated by <br>; source line breaks inside the markup are
+// only formatting, while non-breaking spaces carry the code's indentation.
+function codeText($el) {
+  $el.find("br").replaceWith("\u0001");
+  return $el.text().replace(/[ \t\r\n]+/g, " ").replace(/\u0001 ?/g, "\n").replace(/ /g, " ")
+    .split("\n").map((line) => line.trimEnd()).join("\n").trim();
+}
+
+// Turns one page into its title, keywords and an ordered list of blocks:
+// headings, paragraphs, code and table rows, each with the heading it sits
+// under and any anchors placed just before it.
+export function parsePage(html) {
+  const $ = cheerio.load(html);
+  const help = $("#help");
+  const title = normalizeSpace($("title").first().text()) || normalizeSpace(help.find("p.p_H1").first().text());
+  const keywords = ($('meta[name="keywords"]').attr("content") ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+  const blocks = [];
+  let heading = "";
+  let anchors = [];
+  let tableNo = 0;
+
+  const collectAnchors = ($el) => $el.find("a[name]").each((_, a) => anchors.push($(a).attr("name")));
+  // Block elements inside one cell are separated by a space even when the
+  // markup has none between them; all of the cell's text is kept.
+  const cellText = ($cell) => {
+    const copy = $cell.clone();
+    copy.find("p, li, div, br, tr").after(" ");
+    return normalizeSpace(copy.text());
+  };
+  const add = (kind, text, extra = {}) => {
+    if (!text) return;
+    blocks.push({ kind, text, heading, anchors, tableNo: null, header: null, ...extra });
+    anchors = [];
+  };
+
+  const visitParagraph = ($p) => {
+    collectAnchors($p);
+    const cls = $p.attr("class") ?? "";
+    if (cls === "p_H1") return;
+    if (cls === "p_CodeExample") return add("code", codeText($p));
+    const text = normalizeSpace($p.text());
+    if (HEADING_CLASSES.has(cls) && text) {
+      heading = text;
+      return add("heading", text);
+    }
+    add("paragraph", text);
+  };
+
+  // A table whose every paragraph is code is a code block; any other table
+  // becomes rows, each carrying its table's header row and its own anchors
+  // (error-code tables anchor every row).
+  const visitTable = ($table) => {
+    const paragraphs = $table.find("p");
+    const code = paragraphs.filter("p.p_CodeExample");
+    if (code.length && code.length === paragraphs.length) {
+      collectAnchors($table);
+      return add("code", code.map((_, p) => codeText($(p))).get().join("\n"));
+    }
+    tableNo += 1;
+    let header = null;
+    // A first th row is a header only when its cells are short labels such as
+    // "Identifier"; th rows holding content ("Methods inherited from class
+    // CCanvas" as a heading with its method list) are kept as rows.
+    const rows = $table.find("tr").filter((_, tr) => $(tr).closest("table").is($table));
+    rows.each((index, tr) => {
+      collectAnchors($(tr));
+      const cells = $(tr).children("th, td").map((_, cell) => cellText($(cell))).get();
+      const isHeader = index === 0 && $(tr).children("th").length && !$(tr).find(HEADING_SELECTOR).length
+        && cells.every((cell) => cell.length <= MAX_LABEL);
+      if (isHeader) header = cells.join(" | ");
+      else add("row", cells.join(" | "), { tableNo, header });
+    });
+  };
+
+  // List items hold their text directly (return-value cases, steps), so each
+  // becomes a paragraph with its bullet or number; nested blocks follow it.
+  const visitListItem = ($li, marker) => {
+    const own = $li.clone();
+    own.children("ul, ol, p, table, div").remove();
+    collectAnchors(own);
+    const text = normalizeSpace(own.text());
+    add("paragraph", text && `${marker} ${text}`);
+    visit({ children: $li.children("ul, ol, p, table, div").toArray() });
+  };
+
+  const visit = (node) => {
+    let itemNo = 0;
+    for (const child of node.children ?? []) {
+      if (child.type !== "tag") continue;
+      const $child = $(child);
+      if (child.name === "a" && $child.attr("name")) anchors.push($child.attr("name"));
+      else if (child.name === "table") visitTable($child);
+      else if (child.name === "p") visitParagraph($child);
+      else if (child.name === "li") visitListItem($child, node.name === "ol" ? `${++itemNo}.` : "-");
+      else visit(child);
+    }
+  };
+  for (const node of help.toArray()) visit(node);
+  return { title, keywords, blocks, owners: declaredOwners(title, blocks) };
+}
+
+// Owners printed in the page's declarations ("bool matrix::CopyRates(",
+// "vector vector::NormalizeDouble("), read from the code before the first
+// Parameters, Return Value, Note or See also heading. Some method pages sit
+// under a category breadcrumb, so this is the only place their owner shows.
+function declaredOwners(title, blocks) {
+  if (!IDENTIFIER.test(title)) return [];
+  const end = blocks.findIndex((block) => block.kind === "heading" && SECTION_HEADINGS.has(block.text));
+  const pattern = new RegExp(`\\b([A-Za-z_]\\w*)::${title}\\s*\\(`, "g");
+  const owners = new Set();
+  for (const block of blocks.slice(0, end < 0 ? blocks.length : end)) {
+    if (block.kind === "code") for (const match of block.text.matchAll(pattern)) owners.add(match[1]);
+  }
+  return [...owners];
+}
+
+function findFile(dir, extension) {
+  const file = readdirSync(dir).find((name) => name.toLowerCase().endsWith(extension));
+  if (!file) throw new Error(`No ${extension} file in ${dir}`);
+  return join(dir, file);
+}
+
+function splitTarget(target) {
+  const [file, anchor] = target.split("#");
+  return { file: file.toLowerCase(), anchor: anchor || null };
+}
+
+function pageId(source, file) {
+  return `${source}/${file.replace(/\.html?$/i, "").toLowerCase()}`;
+}
+
+// Consecutive blocks under one heading form a full-text section.
+function sectionsOf(blocks) {
+  const sections = [];
+  for (const block of blocks) {
+    const current = sections.at(-1);
+    if (current && current.heading === block.heading) current.texts.push(block.text);
+    else sections.push({ heading: block.heading, texts: [block.text] });
+  }
+  return sections;
+}
+
+function indexSource(statements, source, dir) {
+  const toc = parseSitemap(decodePage(readFileSync(findFile(dir, ".hhc"))));
+  const keywordIndex = parseSitemap(decodePage(readFileSync(findFile(dir, ".hhk"))));
+  const tocByFile = new Map();
+  for (const entry of toc) {
+    for (const target of entry.targets) {
+      const { file } = splitTarget(target);
+      if (!tocByFile.has(file)) tocByFile.set(file, entry);
+    }
+  }
+
+  // seq keeps the order names were found in (keyword-index order among
+  // them), which ranking uses to break ties.
+  const seen = new Set();
+  const members = new Map();
+  const addName = (name, id, kind, anchor = null) => {
+    const key = `${name}\u0000${id}\u0000${anchor ?? ""}`;
+    if (!name || seen.has(key)) return;
+    seen.add(key);
+    statements.name.run(name, name.toLowerCase(), id, kind, members.get(id) ? 1 : 0, anchor, statements.nextSeq++);
+  };
+
+  const files = readdirSync(dir).filter((name) => /\.html?$/i.test(name)).sort();
+  for (const file of files) {
+    const id = pageId(source, file);
+    const page = parsePage(decodePage(readFileSync(join(dir, file))));
+    const entry = tocByFile.get(file.toLowerCase());
+    const breadcrumb = entry ? [...entry.parents, entry.name].join(" > ") : page.title;
+    const owners = new Set(page.owners);
+    const parent = entry?.parents.at(-1);
+    if (parent && CLASS_NAME.test(parent) && IDENTIFIER.test(page.title)) owners.add(parent);
+    members.set(id, owners.size > 0);
+
+    statements.page.run(id, source, file, page.title, breadcrumb);
+    page.blocks.forEach((block, pos) => statements.block.run(id, pos, block.kind, block.text, block.heading,
+      block.tableNo, block.header, block.anchors.length ? block.anchors.join(" ") : null));
+    for (const section of sectionsOf(page.blocks)) {
+      statements.section.run(id, page.title, section.heading, section.texts.join("\n"));
+    }
+    addName(page.title, id, "title");
+    for (const owner of owners) addName(`${owner}::${page.title}`, id, "member");
+    for (const keyword of page.keywords) addName(keyword, id, "keyword");
+  }
+
+  const pageIds = new Set(files.map((file) => pageId(source, file)));
+  for (const entry of keywordIndex) {
+    for (const target of entry.targets) {
+      const { file, anchor } = splitTarget(target);
+      const id = pageId(source, file);
+      if (pageIds.has(id)) addName(entry.name, id, "keyword", anchor);
+    }
+  }
+}
+
+// Builds a new index file from unpacked sources ({ source, dir } each, with
+// source "mql5", "book" or "nn") in one transaction, then compacts the
+// full-text index once. A failure rolls everything back.
+export function buildIndex(dbPath, sources, meta = {}) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec(SCHEMA);
+    const statements = {
+      page: db.prepare("insert into pages values (?, ?, ?, ?, ?)"),
+      block: db.prepare("insert into blocks values (?, ?, ?, ?, ?, ?, ?, ?)"),
+      name: db.prepare("insert into names values (?, ?, ?, ?, ?, ?, ?)"),
+      section: db.prepare("insert into sections values (?, ?, ?, ?)"),
+      nextSeq: 0,
+    };
+    const insertMeta = db.prepare("insert into meta values (?, ?)");
+    db.exec("begin");
+    try {
+      for (const { source, dir } of sources) indexSource(statements, source, dir);
+      db.exec("insert into sections (sections) values ('optimize')");
+      for (const [key, value] of Object.entries({ schema_version: SCHEMA_VERSION, ...meta })) {
+        insertMeta.run(key, String(value));
+      }
+      db.exec("commit");
+    } catch (error) {
+      db.exec("rollback");
+      throw error;
+    }
+  } finally {
+    db.close();
+  }
+}
