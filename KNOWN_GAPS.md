@@ -244,3 +244,39 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Only Node 24.0/24.1 with a linked entry path, which isn't how npm runs the scripts; the harm is a command that does nothing (no change, no data loss) and running it again from the real folder or on Node 24.2+ works.
+
+## G28 · open · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: -
+- Problem: F1: The required switch record is missing
+- Trigger: This change removes the legacy benchmark adapter as part of R5's switch cleanup.
+- Fix: Add the switch date, completed cleanup and installation actions, and verified real-client results to DECISIONS.md; identify anything still pending.
+- Log: 20261022103633-28ab39
+- Why skipped: labelled GAP by the reviewer; harm: The repository lacks the required evidence of the switch and its real-client checks.
+
+## G29 · open · 2026-10-22 · LOW
+- Task: -
+- Where: src/cards.mjs:278
+- Problem: The paragraph just before a bare ENUM_X label is treated as that section's lead-in. On Terminal Status, 'In the above example, the graphical resource looks the same...' comments on the integer section's code example but now goes with ENUM_TERMINAL_INFO_DOUBLE; on some maths and function pages the moved paragraph is the function's own sentence (return value, input rules).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Measured on the real Reference: of 57 note lines moved, 56 are the next section's lead-in (For function SymbolInfoDouble(), Enumeration of ... properties, The reason for ... is contained in ...); the one exception is a remark about a DPI example, no wrong fact. An exception for paragraphs after code would break 4 real lead-ins to fix it.
+
+## G30 · open · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/cards.mjs:279-284
+- Problem: F1: The lead-in rule moves a preceding example’s explanation
+- Trigger: Build the real Terminal Status page, where “In the above example…” follows the DPI example immediately before ENUM_TERMINAL_INFO_DOUBLE.
+- Fix: Keep paragraphs explicitly referring to the preceding example in that preceding section, and add a regression fixture.
+- Log: 20261022130832-6faea8
+- Why skipped: labelled GAP by the reviewer; harm: Integer-property answers lose their explanation, while unrelated double-property cards receive it.
+
+## G31 · open · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: DECISIONS.md:65
+- Problem: F2: The switch record does not establish the Claude Code coding checks
+- Trigger: Use the new switch record as evidence that DESIGN.md section 13’s real-client checks passed.
+- Fix: Run the five coding tasks in Claude Code and record their answer results.
+- Log: 20261022130832-6faea8
+- Why skipped: labelled GAP by the reviewer; harm: The switch’s acceptance evidence remains incomplete.
