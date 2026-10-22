@@ -272,9 +272,16 @@ function sectionStart(blocks, firstRow) {
   return { start: -1, otherTable };
 }
 
+// A bare "ENUM_X" label opens a section, and the paragraph just before it
+// introduces that section ("For function SymbolInfoInteger()"), not the
+// table above it.
+const isEnumLabel = (block) => block?.kind === "paragraph" && /^ENUM_[A-Z0-9_]+$/.test(block.text.trim());
+const leadIn = (blocks, opener) =>
+  isEnumLabel(blocks[opener]) && blocks[opener - 1]?.kind === "paragraph" && !blocks[opener - 1].anchors?.length ? opener - 1 : opener;
+
 export function sectionEnd(blocks, start) {
   for (let i = start + 1; i < blocks.length; i++) {
-    if (opensSection(blocks[i])) return i;
+    if (opensSection(blocks[i])) return Math.max(leadIn(blocks, i), start + 1);
   }
   return blocks.length;
 }
@@ -314,10 +321,10 @@ export function constantCards(page, blocks, enumOfAnchor) {
     let anchorEnum;
     if (!otherTable && sectionAnchors.length) anchorEnum = sectionAnchors.map((anchor) => enumOfAnchor(anchor)).find(Boolean);
     else if (!otherTable && start < 0) anchorEnum = enumOfAnchor(null);
-    // Section notes: the section's paragraphs, without a bare "ENUM_X" label.
-    const from = Math.max(start, 0);
+    // Section notes: the section's paragraphs with its lead-in, without a bare "ENUM_X" label.
+    const from = start >= 0 ? leadIn(blocks, start) : 0;
     const notes = blocks.slice(from, end)
-      .filter((block) => block.kind === "paragraph" && !/^ENUM_[A-Z0-9_]+$/.test(block.text.trim()))
+      .filter((block) => block.kind === "paragraph" && !isEnumLabel(block))
       .map((block) => block.text);
     const notesKey = notes.length ? `${page.id}#${from}` : null;
     const names = entries.map(({ cells }) => cells[idColumn]);

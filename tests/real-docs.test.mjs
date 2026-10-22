@@ -61,6 +61,17 @@ test("real docs: every baseline name resolves with its kind, value, enum and phr
   assert.deepEqual(checkBaseline(db, loadBaseline()), []);
 });
 
+test("real docs: section notes start with their own lead-in, not the next section's", { skip }, () => {
+  const notesOf = (name, pageId) => db.prepare("select n.text from cards c join notes n on n.key = c.notes_key"
+    + " where c.kind = 'constant' and c.name = ? and c.page_id = ?").get(name, pageId)?.text;
+  assert.equal(notesOf("SYMBOL_FILLING_MODE", "mql5/marketinfoconstants"), "For function SymbolInfoInteger()");
+  assert.equal(notesOf("SYMBOL_VOLUME_STEP", "mql5/marketinfoconstants"), "For function SymbolInfoDouble()");
+  const filling = notesOf("ORDER_FILLING_IOC", "mql5/orderproperties");
+  assert.match(filling, /ORDER_FILLING_RETURN filling type should be used regardless/);
+  assert.doesNotMatch(filling, /type_time/, "the next section's lead-in stays with ENUM_ORDER_TYPE_TIME");
+  assert.match(notesOf("ORDER_TIME_GTC", "mql5/orderproperties"), /^The order validity period can be set in the type_time field/);
+});
+
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);

@@ -66,6 +66,23 @@ test("constant cards: the enum comes from the section anchor, only for the secti
   assert.equal(cards[0].notesKey, "mql5/props#0");
 });
 
+test("constant cards: the paragraph before an enum label introduces that label's section", () => {
+  const enumOfAnchor = (anchor) => ({ enum_info_integer: "ENUM_INFO_INTEGER", enum_info_double: "ENUM_INFO_DOUBLE" })[anchor] ?? null;
+  const header = "Identifier | Description | Type";
+  const blocks = blocksOf(
+    ["paragraph", "Two functions read these properties."],
+    ["paragraph", "For function InfoInteger()"],
+    ["paragraph", "ENUM_INFO_INTEGER", { anchors: ["enum_info_integer"] }],
+    ["row", "INFO_DIGITS | Digits | int", { tableNo: 1, header }],
+    ["paragraph", "For function InfoDouble()"],
+    ["paragraph", "ENUM_INFO_DOUBLE", { anchors: ["enum_info_double"] }],
+    ["row", "INFO_BID | Bid | double", { tableNo: 2, header }],
+  );
+  const cards = constantCards({ id: "mql5/info" }, blocks, enumOfAnchor);
+  assert.deepEqual(cards.map((card) => [card.name, card.enum, card.notes]),
+    [["INFO_DIGITS", "ENUM_INFO_INTEGER", "For function InfoInteger()"], ["INFO_BID", "ENUM_INFO_DOUBLE", "For function InfoDouble()"]]);
+});
+
 let dir;
 let db;
 before(() => {
@@ -88,7 +105,9 @@ test("built index: section notes keep conditions the row leaves out", () => {
   assert.match(card.full, /Not allowed in Market mode\./);
   assert.equal(notesOf(card), "Sample filling policy notes.\nThe execution-mode table follows.\nPending orders use Return regardless of the mode.");
   assert.equal(constantCard("ORDER_FILLING_FOK", "mql5/orderproperties").notes_key, card.notes_key, "one notes entry per section");
-  assert.equal(constantCard("ORDER_TIME_GTC", "mql5/orderproperties").enum, "ENUM_ORDER_TYPE_TIME");
+  const gtc = constantCard("ORDER_TIME_GTC", "mql5/orderproperties");
+  assert.equal(gtc.enum, "ENUM_ORDER_TYPE_TIME");
+  assert.equal(notesOf(gtc), "Sample validity period notes for the next enumeration.", "the lead-in before a label opens its section");
   const buy = constantCard("ORDER_TYPE_BUY", "mql5/orderproperties");
   assert.equal(buy.enum, "ENUM_ORDER_TYPE");
   assert.match(notesOf(buy), /Sample notes after the table\./, "an anchored row does not end its table's section");
