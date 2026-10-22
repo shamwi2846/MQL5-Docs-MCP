@@ -8,7 +8,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -55,9 +55,12 @@ function sandbox(root) {
     NODE_OPTIONS: `--import=${pathToFileURL(join(import.meta.dirname, "npm-preload.mjs")).href}`,
   };
   // Refuse to run if Windows can still find a real client with this PATH.
+  // Paths are resolved first: CI's temp folder has a short 8.3 name
+  // (RUNNER~1) while where.exe prints the long one.
+  const standIns = realpathSync.native(bin).toLowerCase();
   for (const name of ["claude", "codex"]) {
     const found = spawnSync("where.exe", [name], { env, encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
-    const outside = found.filter((file) => !file.toLowerCase().startsWith(bin.toLowerCase()));
+    const outside = found.filter((file) => !realpathSync.native(file).toLowerCase().startsWith(standIns));
     if (outside.length) throw new Error(`a real ${name} is still reachable: ${outside.join(", ")}`);
   }
   const read = () => (existsSync(registry) ? JSON.parse(readFileSync(registry, "utf8")) : {});
