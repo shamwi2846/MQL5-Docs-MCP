@@ -54,9 +54,13 @@ Measured in steps 2 and 3 (2026-10-21, this PC, the same docs):
 
 | Fact | How it was measured | Result |
 |---|---|---|
-| Cards | Real build with cards | function 1,323, method 2,076, class 163, struct 42, constant 3,650 (877 with a value, 1,596 with an enum); 337 section notes; index about 57.8 MB, built in about 18 to 20 s |
+| Cards | Real build with cards | function 787, method 2,612, class 163, struct 42, constant 3,650 (877 with a value, 1,596 with an enum); 337 section notes; 13,475 names; index about 57.8 MB, built in about 18 to 20 s |
 | Class members | Pages marked as methods, real build | 2,713. Owners come from the contents parent's name (CTrade, CiMA, ICollection<T>), from the declarations printed on the page (matrix::CopyRates), or, under a descriptive contents entry ("Arrows with fixed code", "Basic Class CObject", "OpenCL"), from the classes the parent page declares. Shared titles: Create 104, Type 86, Save 30, Load 30, all methods |
 | Server fixed cost | `tools/list` and `initialize` of the v2 server | 1,690 characters of tool definitions (1.3.18: 24,944) and 551 of instructions (1.3.18: 1,298) |
+| Download and unpack | Node fetch and hh.exe against the three mql5.com URLs (2026-10-21) | The URLs answer 200 directly (mql5.chm 8,566,299 bytes, mql5book.chm 7,680,088, neuronetworksbook.chm 6,322,256) with Content-Length and Last-Modified, no ETag; with `redirect: "manual"` Node reports a redirect as it is (http → 301 to https). hh.exe exits 0 on any input: a 1 MB truncated mql5.chm gives 1,556 pages and no .hhc, but **half** of mql5.chm gives all 4,134 pages and the .hhc, so a download must also match its Content-Length; a garbage or missing file gives nothing |
+| Windows file rules for the switch | Node on this PC | A hard link onto an existing name fails (EEXIST); deleting an index a reader has open fails (EBUSY) and works once it closes; renaming a temporary file over current.json works |
+| Real docs against the build checks | All three books | All 1,911 anchored names have their anchor on their page; all 4,827 pages have a title and end with `</html>`; every contents and keyword-index target exists |
+| docs:update | A real run into a scratch data folder with a space in its path, from a copy of the live index | About 24 to 27 s for three downloads, unpacking, build, checks and the switch; the old index removed; a second run says "already up to date" in about 2.7 s, most of it SQLite's integrity check of the live index |
 | Server speed | v2 over stdio on the real index, three runs | `initialize` 210 to 232 ms after start, `tools/list` 5 ms later, first find (index check included) 315 to 332 ms (1.3.18: 2,300 to 2,770 ms); later find calls of one to three names 5 to 11 ms, six questions together about 90 ms |
 
 ## 2. How this design was reviewed

@@ -102,11 +102,28 @@ test("server: lists its tools without an index and answers once one is installed
   await withDataDir(async (dir) => withServer(dir, async (client) => {
     assert.equal((await client.listTools()).tools.length, 2);
     const missing = textOf(await client.callTool({ name: "mql5_find", arguments: { queries: ["OrderSend"] } }));
-    assert.equal(missing, "No MQL5 docs index is installed (data/current.json is missing or unreadable); run `npm run setup`.");
+    assert.equal(missing, "No MQL5 docs index is installed (data/current.json is missing, unreadable or damaged); run `npm run setup`.");
     installIndex(dir);
     const found = textOf(await client.callTool({ name: "mql5_find", arguments: { queries: ["OrderSend"] } }));
     assert.match(found, /^MQL5 docs downloaded 2026-10-21 · index [0-9a-f]{7}\n\n= OrderSend · function/, "the next call checks again");
   }));
+});
+
+test("server: refuses an index whose bytes changed, then answers once it is repaired", async () => {
+  await withDataDir(async (dir) => {
+    const damaged = "index-20261021T120000000Z.sqlite";
+    installIndex(dir, damaged);
+    const bytes = readFileSync(join(dir, damaged));
+    bytes[bytes.length - 100] ^= 0xff;
+    writeFileSync(join(dir, damaged), bytes);
+    await withServer(dir, async (client) => {
+      const refused = textOf(await client.callTool({ name: "mql5_find", arguments: { queries: ["OrderSend"] } }));
+      assert.equal(refused, `The MQL5 docs index ${damaged} is damaged (its hash differs from data/current.json); run \`npm run docs:update\`.`);
+      const sha256 = installIndex(dir, "index-20261021T130000000Z.sqlite");
+      const found = textOf(await client.callTool({ name: "mql5_find", arguments: { queries: ["OrderSend"] } }));
+      assert.match(found, new RegExp(`^MQL5 docs downloaded 2026-10-21 · index ${sha256.slice(0, 7)}\n\n= OrderSend · function`));
+    });
+  });
 });
 
 test("openIndex: a damaged, missing or other-format index says what to run", async () => {
@@ -115,6 +132,7 @@ test("openIndex: a damaged, missing or other-format index says what to run", asy
     const current = JSON.parse(readFileSync(join(dir, "current.json"), "utf8"));
     const index = await openIndex(dir);
     assert.equal(index.tag, sha256.slice(0, 7));
+    assert.deepEqual(index.current, current, "the pointer the index was opened from, for docs:status");
     index.db.close();
 
     writeCurrent(dir, { ...current, sha256: "0".repeat(64) });
@@ -129,7 +147,7 @@ test("openIndex: a damaged, missing or other-format index says what to run", asy
     writeCurrent(dir, { ...current, index: ["index-a.sqlite"] });
     assert.match((await openIndex(dir)).error, /names no valid index file; run `npm run setup`\.$/);
     writeCurrent(dir, null);
-    assert.equal((await openIndex(dir)).error, "data/current.json is damaged; run `npm run setup`.");
+    assert.match((await openIndex(dir)).error, /^No MQL5 docs index is installed \(data\/current\.json is missing, unreadable or damaged\)/);
   });
 });
 

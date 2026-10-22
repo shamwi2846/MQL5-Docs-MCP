@@ -100,3 +100,39 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add a short sentence requiring claims to be supported by returned text and continuation before relying on omitted content.
 - Log: 20261021235203-0c8067
 - Why skipped: labelled GAP by the reviewer; harm: That description does not independently instruct the agent to ground claims in returned text, as DESIGN.md section 4 requires.
+
+## G12 · fixed · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/docs-update.mjs:144-149
+- Problem: F3: Check escaped files even when unpacking fails
+- Trigger: Unpacking creates a sibling file, then validation of that book or a later book fails.
+- Fix: Run the sibling-file detection and removal in a finally block around unpacking.
+- Log: 20261022000957-d3a8b8
+- Why skipped: pair: both
+
+## G13 · fixed · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/docs-update.mjs:242-247
+- Problem: F5: Check SQLite integrity before reporting an unchanged index
+- Trigger: The downloaded hashes and builder version match the current metadata.
+- Fix: Require PRAGMA integrity_check to return ok before taking this return path; otherwise rebuild.
+- Log: 20261022000957-d3a8b8
+- Why skipped: pair: both
+
+## G14 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/docs-update.mjs:173
+- Problem: F6: Report every lost name and card
+- Trigger: A candidate loses more than twenty names or cards while passing the baseline checks.
+- Fix: Print the complete lost list instead of slicing it.
+- Log: 20261022000957-d3a8b8
+- Why skipped: pair: both
+
+## G15 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: tests/docs-update.test.mjs:183-189
+- Problem: F1: Exercise losses beyond the former 20-entry cutoff
+- Trigger: The loss reporter regresses to printing only the first 20 lost entries.
+- Fix: Increase the extra titles from six to at least 21; the existing assertion for every title will then detect the cutoff.
+- Log: 20261022004347-9d6bb7
+- Why skipped: labelled GAP by the reviewer; harm: Incomplete loss reports can pass the suite, leaving users without the full information needed to accept an update.

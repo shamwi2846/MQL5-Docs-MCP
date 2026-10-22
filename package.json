@@ -9,7 +9,9 @@
   },
   "scripts": {
     "test": "node --test",
-    "find": "node src/cli.mjs find"
+    "find": "node src/cli.mjs find",
+    "docs:update": "node src/cli.mjs docs:update",
+    "docs:status": "node src/cli.mjs docs:status"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

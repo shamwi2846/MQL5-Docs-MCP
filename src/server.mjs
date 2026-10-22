@@ -1,9 +1,7 @@
 // MCP server entry. The index check starts first, before the MCP library
 // loads, so a tool call usually finds it done; initialize and tools/list are
 // answered without waiting for it. Nothing here loads the HTML parser.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { openIndex } from "./data.mjs";
+import { openIndex, VERSION } from "./data.mjs";
 
 let pending = openIndex();
 
@@ -26,8 +24,6 @@ const [{ McpServer }, { StdioServerTransport }, { z }, { findText }, { readPage 
   import("./search.mjs"),
 ]);
 
-const { version } = JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8"));
-
 const INSTRUCTIONS ="Offline MQL5 documentation (MetaTrader 5 Reference and MQL5 books). Call mql5_find first, "
   + "with every name you need in one call. `=` is an exact name match, `~` a search result; either way, base each claim "
   + "on returned text that states it. When an answer is brief or cut, read the rest before relying on what it leaves "
@@ -37,7 +33,7 @@ const INSTRUCTIONS ="Offline MQL5 documentation (MetaTrader 5 Reference and MQL5
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 
-const server = new McpServer({ name: "mql5-docs", version }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: "mql5-docs", version: VERSION }, { instructions: INSTRUCTIONS });
 
 server.registerTool("mql5_find", {
   description: "Look up MQL5 docs. Send every name you need in one call: up to 16 queries, each an API name "
