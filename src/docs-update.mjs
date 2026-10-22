@@ -176,7 +176,7 @@ const stampNow = () => new Date().toISOString().replace(/[-:.]/g, "");
 // The live index when it passes all its checks (schema, SHA-256, SQLite
 // integrity), else null. Damage can make SQLite's check throw instead of
 // report, which counts as failing it.
-async function healthyLive(dir) {
+export async function healthyLive(dir) {
   const live = await openIndex(dir);
   if (live.error) return null;
   try {
