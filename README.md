@@ -15,6 +15,6 @@ npm ci
 npm test
 ```
 
-`npm run find -- OrderSend "how to read indicator buffer values"` prints exactly what the `mql5_find` tool returns, from the installed index.
+`npm run find -- OrderSend "how to read indicator buffer values"` prints exactly what the `mql5_find` tool returns, from the installed index. `npm run docs:update` downloads the documentation again and switches to a new index when it changed; `npm run docs:status` shows the installed version and counts.
 
 The real-docs tests run when `MQL5_DOCS_REFERENCE` points to an unpacked copy of the MQL5 Reference (a folder with `mql5.hhc`, `mql5.hhk` and the pages); otherwise they are skipped.
