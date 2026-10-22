@@ -32,4 +32,4 @@ npm test
 
 The real-docs tests run when `MQL5_DOCS_REFERENCE` points to an unpacked copy of the MQL5 Reference (a folder with `mql5.hhc`, `mql5.hhk` and the pages); otherwise they are skipped.
 
-`npm run bench` scores this checkout's server (with the installed docs) and, when installed, MQL5-CHM-MCP 1.3.18 on the cases in `bench/cases.json`; `npm run bench -- --server <command> [args...]` scores one server.
+`npm run bench` scores this checkout's server (with the installed docs) on the cases in `bench/cases.json`; `npm run bench -- --server <command> [args...]` scores another build of the server. The comparison with MQL5-CHM-MCP 1.3.18 that decided the switch is recorded in `DECISIONS.md`.

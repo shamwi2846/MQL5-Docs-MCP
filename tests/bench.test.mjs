@@ -25,7 +25,7 @@ test("bench: a server without an index stops the run instead of passing the abse
   await withData(async (dir) => {
     const result = bench(dir);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /v2 did not answer: No MQL5 docs index is installed/);
+    assert.match(result.stderr, /the server did not answer: No MQL5 docs index is installed/);
     assert.doesNotMatch(result.stdout, /complete/);
   });
 });
@@ -43,7 +43,7 @@ test("bench: scores every case of a working server", async () => {
     const result = bench(dir, "--json", json);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /: \d+\/99 complete, rank 1 \d+, top 3 \d+, \d+ calls in sequence/);
-    const [{ cases }] = JSON.parse(readFileSync(json, "utf8"));
+    const { cases } = JSON.parse(readFileSync(json, "utf8"));
     const ranked = cases.filter((c) => c.rank >= 1 && c.rank <= 3).length;
     assert.ok(cases.some((c) => c.rank === 0), "the run has absent or ambiguous cases");
     assert.match(result.stdout, new RegExp(`: \\d+/99 complete, rank 1 \\d+, top 3 ${ranked},`), "cases without a rank are not in the top 3");
@@ -51,6 +51,6 @@ test("bench: scores every case of a working server", async () => {
     // The fixture pages are not the real docs, so most facts are missing; the
     // run still names OrderSend first and passes an absent name.
     assert.match(result.stdout, /\n {2}exact-OrderSend: .* \d+ calls \d+ chars rank 1\n/);
-    assert.match(result.stdout, /\nH absent-zzzz_nonexistent_7391: .* complete 1 calls/);
+    assert.match(result.stdout, /\nH absent-zzzz_nonexistent_7391: complete 1 calls/);
   });
 });
