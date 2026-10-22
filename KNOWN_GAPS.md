@@ -181,3 +181,30 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add npm cases with both client stand-ins: install from a temporary checkout with spaces and network blocked; run uninstall and purge against separately seeded installations; reject Codex registration after Claude succeeds and verify both previous entries, old files and protected sentinels.
 - Log: 20261022012712-18db04
 - Why skipped: pair: both
+
+## G21 · open · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: bench/run.mjs:115-151
+- Problem: F3: Required benchmark measurements are missing
+- Trigger: Run npm run bench as specified by DESIGN.md section 13.
+- Fix: Report the required per-case results and measurements, and record first-complete-answer timing when the completion rule succeeds.
+- Log: 20261022021247-7897d9
+- Why skipped: labelled GAP by the reviewer; harm: The benchmark does not provide the agreed evidence for evaluating the replacement.
+
+## G22 · fixed · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: bench/run.mjs:158-170
+- Problem: F4: The comparison does not verify matching documentation versions
+- Trigger: Run the default comparison after v2 documentation has been updated independently of the installed legacy corpus.
+- Fix: Compare the three source hashes from v2's current metadata and the legacy active manifest before comparing runs; stop on a mismatch.
+- Log: 20261022021247-7897d9
+- Why skipped: labelled GAP by the reviewer; harm: Documentation changes can be presented as retrieval improvements or regressions.
+
+## G23 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: bench/cases.json:76-87
+- Problem: F5: The benchmark omits specified hard-case coverage
+- Trigger: Use this suite to assess the hard cases required by DESIGN.md section 13.
+- Fix: Add hand-checked Create and price cases and an expectation covering ORDER_TYPE_BUY's enum relationship.
+- Log: 20261022021247-7897d9
+- Why skipped: labelled GAP by the reviewer; harm: The benchmark cannot detect regressions in the omitted behaviors.

@@ -158,7 +158,7 @@ test("npm run find prints what mql5_find returns", async () => {
       { env: { ...process.env, MQL5_DOCS_DATA: dir }, encoding: "utf8" });
     const blocks = output.trimEnd().split("\n\n");
     assert.match(blocks[0], /^MQL5 docs downloaded 2026-10-21 · index [0-9a-f]{7}$/);
-    assert.equal(blocks[1], "none · OrderSnd · did you mean: OrderSend?");
+    assert.equal(blocks[1], "none · OrderSnd · did you mean: OrderSend (mql5/ordersend)?");
     assert.match(blocks[2], /^= CTrade\.Buy → read as CTrade::Buy · Buy · mql5\/ctradebuy/);
   });
 });

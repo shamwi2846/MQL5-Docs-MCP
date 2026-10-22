@@ -88,6 +88,10 @@ test("real docs: find keeps names apart and every reply within the budget", { sk
   const huge = findText(db, ["DynamicModeDecompositionQR"], context);
   assert.ok(huge.length <= FIND_BUDGET, `${huge.length}`);
   assert.match(huge, /\n\[continues: mql5_read id=mql5\/dynamicmodedecompositionqr focus=\w+\]$/);
+  const [, phrase] = findText(db, ["global variables"], context).split("\n\n");
+  assert.match(phrase, /\nOther pages: Global Variables of the Terminal \(mql5\/globals\)/, "the case-matched title and the terminal's global variables");
+  const [, method] = findText(db, ["how to close an open position with CTrade"], context).split("\n\n");
+  assert.match(method, /^~ [^\n]*best match: PositionClose · mql5\/ctradepositionclose\n/);
   const names = loadBaseline().names.filter((entry) => entry.kind !== "none").slice(0, 16).map((entry) => entry.name);
   const batch = findText(db, names, context);
   assert.ok(batch.length <= FIND_BUDGET, `${batch.length}`);
