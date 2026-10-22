@@ -235,3 +235,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Include repeated setup and docs:update timing measurements and identify cold and warm measurements separately.
 - Log: 20261022084215-98a011
 - Why skipped: labelled GAP by the reviewer; harm: The report lacks the agreed evidence for assessing installation, updates, and cold versus warm performance.
+
+## G27 · open · 2026-10-22 · LOW
+- Task: -
+- Where: src/data.mjs:22
+- Problem: On Node 24.0/24.1 (no import.meta.main) the entry check compares resolve(argv[1]) with the module's real path, so a command started through a symlink or junction exits without running (CodeRabbit, PR #1, unverified).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Only Node 24.0/24.1 with a linked entry path, which isn't how npm runs the scripts; the harm is a command that does nothing (no change, no data loss) and running it again from the real folder or on Node 24.2+ works.
