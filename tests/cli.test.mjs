@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCommand } from "../src/cli.mjs";
-import { openIndex, SCHEMA_VERSION } from "../src/data.mjs";
+import { isEntry, openIndex, SCHEMA_VERSION } from "../src/data.mjs";
 import { findText } from "../src/find.mjs";
 import { baseline, files, installIndex, installWithExtras, makeBook, stubFetch, unpackOptions, withData } from "./update-helpers.mjs";
 
@@ -109,4 +109,11 @@ test("cli: docs:update exits 1 and changes nothing when the update must not happ
     assert.equal(usage.code, 2);
     assert.match(usage.err, /^Usage:/);
   });
+});
+
+test("a command runs on Node releases without import.meta.main (before 24.2)", () => {
+  // The test runner starts this file as its own process.
+  assert.equal(isEntry({ filename: import.meta.filename }), true);
+  assert.equal(isEntry({ filename: CLI }), false, "an imported module is not the entry");
+  assert.equal(isEntry({ main: false, filename: import.meta.filename }), false, "import.meta.main decides when present");
 });

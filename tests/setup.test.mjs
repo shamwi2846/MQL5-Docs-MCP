@@ -112,6 +112,18 @@ test("setup installs for both clients; uninstall keeps the docs and other instal
   });
 });
 
+test("setup installs when an older Claude Code words a missing entry differently", async () => {
+  await withData(async (root) => {
+    const box = sandbox(root);
+    mkdirSync(box.dir, { recursive: true });
+    installIndex(box.dir, "index-a.sqlite", [{ source: "mql5", dir: BOOK }]);
+    box.seed({ olderClaude: true });
+    await box.run();
+    assert.equal(box.entry("claude").command, process.execPath);
+    assert.equal(box.entry("codex").command, process.execPath);
+  });
+});
+
 test("setup stops before any change when an entry runs something that isn't v2", async () => {
   await withData(async (root) => {
     const box = sandbox(root);

@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { dataDir, readCurrent, SCHEMA_VERSION, VERSION } from "./data.mjs";
+import { dataDir, isEntry, readCurrent, SCHEMA_VERSION, VERSION } from "./data.mjs";
 import { takeLock } from "./docs-update.mjs";
 
 const NAME = "mql5-docs";
@@ -51,7 +51,9 @@ function getEntry(name, run) {
   const result = run(name === "codex" ? ["mcp", "get", NAME, "--json"] : ["mcp", "get", NAME]);
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   if (result.status !== 0) {
-    if (/No MCP server named/.test(output)) return null;
+    // Claude Code versions word it differently: 'No MCP server named "x"'
+    // or "No MCP server found with name: x".
+    if (/No MCP server (?:named\b|found with name:)/.test(output)) return null;
     fail(`${name} mcp get failed: ${output.trim() || result.error?.message}`);
   }
   if (name === "codex") {
@@ -302,7 +304,7 @@ export async function uninstall({ dir = dataDir(), clients = CLIENTS, purge = fa
   log(purge ? `Removed ${NAME} and its data.` : `Removed ${NAME}; the docs data stays.`);
 }
 
-if (import.meta.main) {
+if (isEntry(import.meta)) {
   const args = process.argv.slice(2);
   try {
     if (args.includes("--uninstall")) await uninstall({ purge: args.includes("--purge") });

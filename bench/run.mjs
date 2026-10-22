@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { isEntry } from "../src/data.mjs";
 
 const MAX_CALLS = 6;
 const CASES = JSON.parse(readFileSync(join(import.meta.dirname, "cases.json"), "utf8")).cases;
@@ -17,6 +18,14 @@ const OLD_ROOT = join(process.env.LOCALAPPDATA ?? "", "MQL5-CHM-MCP", "1.3.18", 
 const normalize = (text) => text.replace(/\s+/g, " ");
 const textOf = (result) => result.content.map((part) => part.text ?? "").join("\n");
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0;
+
+// The answer blocks of an mql5_find reply, in query order. Answers are joined
+// by blank lines, but a card's code can hold blank lines too, so a block
+// starts only where the next line is an outcome line (or the skipped-query
+// notice ends the reply).
+export function splitAnswers(reply) {
+  return reply.split(/\n\n(?=(?:= |~ |none · |\(\d+ more queries skipped))/).slice(1);
+}
 
 // v2: one mql5_find call answers every query. A block's candidates are the
 // pages its outcome line and its "Also named" or "Other pages" line name (not
@@ -28,7 +37,7 @@ function v2Player(call) {
       const reply = await call("mql5_find", { queries });
       // An error (no index, a damaged one) must not pass as "nothing found".
       if (!reply.startsWith("MQL5 docs downloaded ")) throw new Error(`v2 did not answer: ${reply.split("\n")[0]}`);
-      const blocks = reply.split("\n\n").slice(1);
+      const blocks = splitAnswers(reply);
       return queries.map((_, i) => {
         const block = blocks[i] ?? "";
         const [outcome, ...lines] = block.split("\n");
@@ -70,7 +79,8 @@ function oldPlayer(call, callRaw) {
   return {
     async lookup(queries) {
       if (queries.every((query) => NAME.test(query))) {
-        const sections = (await call("mql5_chm_lookup_identifiers", { identifiers: queries, limit: 3 })).split(/\n(?=\d+\. )/).slice(1);
+        // Its lookup searches only the Reference unless asked for all books.
+        const sections = (await call("mql5_chm_lookup_identifiers", { identifiers: queries, source: "all", limit: 3 })).split(/\n(?=\d+\. )/).slice(1);
         return queries.map((_, i) => {
           const section = sections[i] ?? "";
           return { exact: /^\d+\. \S.*\[exact\]/.test(section), candidates: toPages(topicsIn(section)), texts: {} };
@@ -184,8 +194,9 @@ function summary({ label, cases, timing, spread }) {
   const sum = (list, key) => list.reduce((total, item) => total + item[key], 0);
   const range = (values) => `${Math.min(...values).toFixed(0)}-${Math.max(...values).toFixed(0)} ms`;
   // Each call waits for the one before it, so the rounds equal the calls.
+  // Absent and ambiguous cases have rank 0: they count in neither rank total.
   const line = (list) => `${list.filter((c) => c.complete).length}/${list.length} complete, rank 1 ${list.filter((c) => c.rank === 1).length},`
-    + ` top 3 ${list.filter((c) => c.rank <= 3).length}, ${sum(list, "calls")} calls in sequence, ${sum(list, "chars")} characters`
+    + ` top 3 ${list.filter((c) => c.rank >= 1 && c.rank <= 3).length}, ${sum(list, "calls")} calls in sequence, ${sum(list, "chars")} characters`
     + ` (about ${Math.round(sum(list, "chars") / 4)} tokens)`;
   return [`${label}: ${line(cases)}`, `  held out: ${line(cases.filter((c) => c.held_out))}`,
     `  ${spread.initialize.length} fresh starts: initialize ${range(spread.initialize)}, tools/list ${range(spread.toolsList)},`
@@ -205,32 +216,35 @@ function sameDocs() {
   if (different.length) throw new Error(`v2 and 1.3.18 hold different docs (${different.join(", ")}); run both on the same CHM files`);
 }
 
-const args = process.argv.slice(2);
-const jsonAt = args.indexOf("--json");
-const jsonFile = jsonAt >= 0 ? args.splice(jsonAt, 2)[1] : null;
-const serverAt = args.indexOf("--server");
-const servers = serverAt >= 0
-  ? [{ label: args[serverAt + 1], command: args[serverAt + 1], args: args.slice(serverAt + 2) }]
-  : [{ label: "v2", command: process.execPath, args: [join(import.meta.dirname, "..", "src", "server.mjs")] },
-    ...(existsSync(OLD_ROOT) ? [{ label: "1.3.18", command: join(OLD_ROOT, "runtime", "node.exe"), args: [join(OLD_ROOT, "app", "server.mjs")] }] : [])];
-if (servers.length === 2) sameDocs();
-const runs = [];
-for (const server of servers) {
-  const run = await score(server.label, server.command, server.args);
-  run.spread = await startSpread(server.command, server.args);
-  runs.push(run);
-  console.log(summary(run));
+async function main(args) {
+  const jsonAt = args.indexOf("--json");
+  const jsonFile = jsonAt >= 0 ? args.splice(jsonAt, 2)[1] : null;
+  const serverAt = args.indexOf("--server");
+  const servers = serverAt >= 0
+    ? [{ label: args[serverAt + 1], command: args[serverAt + 1], args: args.slice(serverAt + 2) }]
+    : [{ label: "v2", command: process.execPath, args: [join(import.meta.dirname, "..", "src", "server.mjs")] },
+      ...(existsSync(OLD_ROOT) ? [{ label: "1.3.18", command: join(OLD_ROOT, "runtime", "node.exe"), args: [join(OLD_ROOT, "app", "server.mjs")] }] : [])];
+  if (servers.length === 2) sameDocs();
+  const runs = [];
+  for (const server of servers) {
+    const run = await score(server.label, server.command, server.args);
+    run.spread = await startSpread(server.command, server.args);
+    runs.push(run);
+    console.log(summary(run));
+  }
+  const mark = (c) => `${c.complete ? "complete" : "INCOMPLETE"} ${c.calls} calls ${c.chars} chars${c.rank && c.rank < 99 ? ` rank ${c.rank}` : ""}`;
+  console.log("\nEvery case:");
+  for (const [i, entry] of CASES.entries()) {
+    console.log(`${entry.held_out ? "H " : "  "}${entry.id}: ${runs.map((run) => `${run.label} ${mark(run.cases[i])}`).join(" | ")}`);
+  }
+  if (runs.length === 2) {
+    const [v2, old] = runs;
+    const worse = v2.cases.filter((c, i) => old.cases[i].complete && !c.complete).map((c) => c.id);
+    const better = v2.cases.filter((c, i) => !old.cases[i].complete && c.complete).map((c) => c.id);
+    console.log(`\ncomplete in 1.3.18 but not in v2 (${worse.length}): ${worse.join(", ") || "none"}`);
+    console.log(`complete in v2 but not in 1.3.18 (${better.length}): ${better.join(", ") || "none"}`);
+  }
+  if (jsonFile) writeFileSync(jsonFile, JSON.stringify(runs, null, 1));
 }
-const mark = (c) => `${c.complete ? "complete" : "INCOMPLETE"} ${c.calls} calls ${c.chars} chars${c.rank && c.rank < 99 ? ` rank ${c.rank}` : ""}`;
-console.log("\nEvery case:");
-for (const [i, entry] of CASES.entries()) {
-  console.log(`${entry.held_out ? "H " : "  "}${entry.id}: ${runs.map((run) => `${run.label} ${mark(run.cases[i])}`).join(" | ")}`);
-}
-if (runs.length === 2) {
-  const [v2, old] = runs;
-  const worse = v2.cases.filter((c, i) => old.cases[i].complete && !c.complete).map((c) => c.id);
-  const better = v2.cases.filter((c, i) => !old.cases[i].complete && c.complete).map((c) => c.id);
-  console.log(`\ncomplete in 1.3.18 but not in v2 (${worse.length}): ${worse.join(", ") || "none"}`);
-  console.log(`complete in v2 but not in 1.3.18 (${better.length}): ${better.join(", ") || "none"}`);
-}
-if (jsonFile) writeFileSync(jsonFile, JSON.stringify(runs, null, 1));
+
+if (isEntry(import.meta)) await main(process.argv.slice(2));

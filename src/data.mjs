@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 // The index format. The indexer writes it into meta; the server reads only
@@ -16,6 +16,10 @@ export const VERSION = JSON.parse(readFileSync(join(import.meta.dirname, "..", "
 export const INDEX_NAME = /^index-[\w.-]+\.sqlite$/;
 const UPDATE = "run `npm run docs:update`";
 const SETUP = "run `npm run setup`";
+
+// Whether a module is the script Node was started with. import.meta.main
+// exists only from Node 24.2, so earlier 24.x releases compare the paths.
+export const isEntry = (meta) => meta.main ?? (process.argv[1] !== undefined && resolve(process.argv[1]) === meta.filename);
 
 export function dataDir() {
   return process.env.MQL5_DOCS_DATA ?? join(process.env.LOCALAPPDATA ?? homedir(), "mql5-docs-mcp", "data");

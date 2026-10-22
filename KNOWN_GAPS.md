@@ -208,3 +208,30 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add hand-checked Create and price cases and an expectation covering ORDER_TYPE_BUY's enum relationship.
 - Log: 20261022021247-7897d9
 - Why skipped: labelled GAP by the reviewer; harm: The benchmark cannot detect regressions in the omitted behaviors.
+
+## G24 · open · 2026-10-22 · LOW
+- Task: -
+- Where: DESIGN.md:298
+- Problem: The switch rule compares rank 1 and top 3 only in total, so one case can drop from rank 1 to rank 3 while the totals improve (CodeRabbit, PR #1).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: The switch rule is the owner's agreed design; changing it is the owner's call. The bench already reports every case's rank for both servers, and a lower rank costs calls and characters, which the rule caps in total. Raised with the owner.
+
+## G25 · open · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: bench/run.mjs:227-231
+- Problem: F1: Complete the remaining benchmark measurements
+- Trigger: Run npm run bench to evaluate v2 against DESIGN.md section 13.
+- Fix: Include repeated setup/update timings and separately identified cold/warm measurements in the benchmark report.
+- Log: 20261022082710-c08a9f
+- Why skipped: pair: confirmed by B
+
+## G26 · open · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: bench/run.mjs:175-203
+- Problem: F3: Required benchmark timing measurements remain missing
+- Trigger: Use npm run bench to evaluate the replacement against DESIGN.md:290.
+- Fix: Include repeated setup and docs:update timing measurements and identify cold and warm measurements separately.
+- Log: 20261022084215-98a011
+- Why skipped: labelled GAP by the reviewer; harm: The report lacks the agreed evidence for assessing installation, updates, and cold versus warm performance.
