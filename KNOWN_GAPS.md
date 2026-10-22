@@ -280,3 +280,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Run the five coding tasks in Claude Code and record their answer results.
 - Log: 20261022130832-6faea8
 - Why skipped: labelled GAP by the reviewer; harm: The switch’s acceptance evidence remains incomplete.
+
+## G32 · open · 2026-10-22 · LOW
+- Task: -
+- Where: bench/run.mjs:152
+- Problem: npm run bench does not check that --server and --json have a value: --server last fails with a transport error that doesn't name the flag, and --json last runs without saving (CodeRabbit, PR #2).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Only after a typo in a developer tool; no money, data or security at stake, and the run's console report is complete either way. Argument parsing is unchanged in behavior by this PR.
