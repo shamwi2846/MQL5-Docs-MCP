@@ -42,12 +42,15 @@ export function nameForm(query) {
 }
 
 // A name found as written, after its form was normalized, or only by
-// ignoring case (no two keyword-index names differ only by case).
+// ignoring case. No two keyword-index names differ only by case, but a book
+// chapter's short title can ("Input variables" next to "Input Variables"):
+// then the spelling whose main page is in the Reference wins.
 function resolveName(db, query) {
   const name = nameForm(query);
   if (db.prepare("select 1 from names where name = ?").get(name)) return { name, change: name === query ? null : "read as" };
-  const lower = db.prepare("select distinct name from names where lower = ? order by name").all(name.toLowerCase());
-  return lower.length ? { name: lower[0].name, change: "spelling corrected to" } : null;
+  const spellings = db.prepare("select distinct name from names where lower = ? order by name").all(name.toLowerCase()).map((row) => row.name);
+  if (!spellings.length) return null;
+  return { name: spellings.find((spelling) => mainPage(db, spelling)?.source === "mql5") ?? spellings[0], change: "spelling corrected to" };
 }
 
 const echo = (query) => (query.length > QUERY_ECHO ? `${query.slice(0, QUERY_ECHO - 1)}…` : query);
@@ -97,10 +100,18 @@ function answerName(db, query, resolved) {
   const card = cardOf(db, name, winner.page_id);
   const info = pageTitle(db, winner.page_id);
   const others = pages.slice(1);
-  const also = others.length
+  const alsoNamed = others.length
     ? `Also named ${name}: ${others.slice(0, MAX_ALSO).map((page) => `${ownerName(db, page.page_id, name)} (${page.page_id})`).join(", ")}`
       + (others.length > MAX_ALSO ? ` (+${others.length - MAX_ALSO} more)` : "")
     : null;
+  // A phrase that matched a title only by ignoring case ("global variables")
+  // may mean another page ("Global Variables of the Terminal"): the best
+  // search results are listed too.
+  const named = new Set(pages.map((page) => page.page_id));
+  const related = change === "spelling corrected to" && /\s/.test(query)
+    ? searchPages(db, questionTerms(db, query).terms).filter((id) => !named.has(id)).slice(0, 2) : [];
+  const relatedLine = related.length ? `Other pages: ${related.map((id) => `${pageTitle(db, id).title} (${id})`).join(", ")}` : null;
+  const also = [alsoNamed, relatedLine].filter(Boolean).join("\n") || null;
   const outcome = outcomeLine(query, name, change, card, winner.page_id, info.title);
   if (card) {
     return {
@@ -121,20 +132,36 @@ function answerName(db, query, resolved) {
 const wordsOf = (text) => text.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
 
 // API names written in a question ("open a trade using CTrade::Sell"): words
-// with "::", "_" or an inner capital, so plain words such as "Open" don't count.
-const API_NAME = /::|_|[a-z][A-Z]/;
+// with "::", "_", an inner capital or two capitals (CTrade), so plain words
+// such as "Open" don't count.
+const API_NAME = /::|_|[a-z][A-Z]|[A-Z].*[A-Z]/;
+const MAX_METHODS = 2;
+const camelWords = (name) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[\s_]+/);
+
+// Methods of a class a question names whose name's words all appear in the
+// question ("close an open position with CTrade" → CTrade::PositionClose).
+function methodsAsked(db, owner, words) {
+  return db.prepare("select name, page_id from names where kind = 'member' and name like ? escape '!' order by name")
+    .all(`${owner.replace(/[!%_]/g, "!$&")}::%`)
+    .filter((row) => camelWords(row.name.split("::")[1]).every((word) => words.includes(word)))
+    .slice(0, MAX_METHODS).map((row) => row.page_id);
+}
 
 // A question's search words without stopwords, and its candidate pages: API
-// names the question writes first, then phrase expansions, whose terms that
-// are names add their main page in the listed order ("indicator buffer
-// values" → CopyBuffer, SetIndexBuffer); other terms add search words. The
-// question's own words are always kept.
+// names the question writes first (a class preceded by its methods the
+// question asks for), then phrase expansions, whose terms that are names add
+// their main page in the listed order ("indicator buffer values" →
+// CopyBuffer, SetIndexBuffer); other terms add search words. The question's
+// own words are always kept.
 function questionTerms(db, query) {
   const words = wordsOf(query);
   const kept = words.filter((word) => !STOPWORDS.has(word));
   const terms = new Set(kept.length ? kept : words);
   const pages = (query.match(/[A-Za-z_]\w*(?:::\w+)?/g) ?? []).filter((word) => API_NAME.test(word))
-    .map((word) => mainPage(db, word)?.page_id).filter(Boolean);
+    .flatMap((word) => {
+      const page = mainPage(db, word)?.page_id;
+      return page ? [...methodsAsked(db, word, words), page] : [];
+    });
   const lower = query.toLowerCase();
   for (const expansion of EXPANSIONS) {
     if (!expansion.phrases.some((phrase) => lower.includes(phrase))) continue;
@@ -147,12 +174,10 @@ function questionTerms(db, query) {
   return { terms: [...terms], pages };
 }
 
-// Questions: expansion candidates first, then full-text search over all books
-// with a modest boost for the Reference, merged per page; the top page shows
-// its card or a passage around the matching words, the next two are listed.
-function answerQuestion(db, query) {
-  const { terms, pages } = questionTerms(db, query);
-  if (!terms.length) return null;
+// Full-text search over all books with a modest boost for the Reference,
+// merged per page, best first.
+function searchPages(db, terms) {
+  if (!terms.length) return [];
   const match = terms.map((term) => `"${term}"`).join(" OR ");
   const rows = db.prepare(`select s.page_id, bm25(sections, 0, 10, 5, 1) as score, p.source
     from sections s join pages p on p.id = s.page_id where sections match ? order by score limit 200`).all(match);
@@ -161,8 +186,16 @@ function answerQuestion(db, query) {
     const score = row.score * (row.source === "mql5" ? 1.25 : 1);
     if (!best.has(row.page_id) || score < best.get(row.page_id)) best.set(row.page_id, score);
   }
-  const searched = [...best].sort((a, b) => a[1] - b[1]).map(([id]) => id);
-  const [first, ...rest] = [...new Set([...pages, ...searched])].slice(0, 3).map((id) => ({ id, title: pageTitle(db, id).title }));
+  return [...best].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+}
+
+// Questions: candidates from the question's API names and expansions first,
+// then search; the top page shows its card or a passage around the matching
+// words, the next two are listed.
+function answerQuestion(db, query) {
+  const { terms, pages } = questionTerms(db, query);
+  if (!terms.length) return null;
+  const [first, ...rest] = [...new Set([...pages, ...searchPages(db, terms)])].slice(0, 3).map((id) => ({ id, title: pageTitle(db, id).title }));
   if (!first) return null;
   const card = db.prepare("select name, kind, full, brief from cards where page_id = ? and kind <> 'constant'").get(first.id);
   const outcome = `~ ${echo(query)} · no exact name; best match: ${first.title} · ${first.id}`;
@@ -186,7 +219,8 @@ function answerQuestion(db, query) {
   return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, Math.max(start, 0), PASSAGE, focus), also: others, readId: first.id };
 }
 
-// Typo fallback: names within two edits, loaded only the first time it is needed.
+// Typo fallback: names within two edits, loaded only the first time it is
+// needed, each shown with its main page so it can be read at once.
 const namesCache = new WeakMap();
 function editDistance(a, b) {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -206,7 +240,8 @@ function didYouMean(db, query) {
   const target = query.toLowerCase();
   return namesCache.get(db).filter((name) => Math.abs(name.length - query.length) <= 2)
     .map((name) => ({ name, distance: editDistance(name.toLowerCase(), target) }))
-    .filter((candidate) => candidate.distance <= 2).sort((a, b) => a.distance - b.distance).slice(0, 3).map((candidate) => candidate.name);
+    .filter((candidate) => candidate.distance <= 2).sort((a, b) => a.distance - b.distance).slice(0, 3)
+    .map((candidate) => `${candidate.name} (${mainPage(db, candidate.name).page_id})`);
 }
 
 function answer(db, query) {

@@ -61,6 +61,7 @@ Measured in steps 2 and 3 (2026-10-21, this PC, the same docs):
 | Windows file rules for the switch | Node on this PC | A hard link onto an existing name fails (EEXIST); deleting an index a reader has open fails (EBUSY) and works once it closes; renaming a temporary file over current.json works |
 | Real docs against the build checks | All three books | All 1,911 anchored names have their anchor on their page; all 4,827 pages have a title and end with `</html>`; every contents and keyword-index target exists |
 | docs:update | A real run into a scratch data folder with a space in its path, from a copy of the live index | About 24 to 27 s for three downloads, unpacking, build, checks and the switch; the old index removed; a second run says "already up to date" in about 2.7 s, most of it SQLite's integrity check of the live index |
+| Benchmark (`npm run bench`, 99 cases, 19 held out) | One fixed client script over stdio against v2 and the installed 1.3.18, checked to hold the same CHM files (2026-10-22) | v2: 97 complete, rank 1 87, top 3 97, 132 calls, 293,521 characters (about 73,000 tokens); held out 17/19. 1.3.18: 84 complete, rank 1 67, top 3 89, 234 calls, 529,617 characters (about 132,000 tokens); held out 15/19. Every case 1.3.18 completes, v2 completes; the two v2 misses (held out) are misses for 1.3.18 too. Three fresh starts each (warm, after the scoring run), to the first answer: v2 322 to 336 ms, 1.3.18 2,426 to 2,474 ms. Tokens are estimated as characters / 4 |
 | Server speed | v2 over stdio on the real index, three runs | `initialize` 210 to 232 ms after start, `tools/list` 5 ms later, first find (index check included) 315 to 332 ms (1.3.18: 2,300 to 2,770 ms); later find calls of one to three names 5 to 11 ms, six questions together about 90 ms |
 
 ## 2. How this design was reviewed
@@ -102,6 +103,15 @@ From the token check: the changes listed in section 2, item 6.
 From the speed check: the changes listed in section 2, item 7.
 
 From the final full review: the changes listed in section 2, item 8.
+
+From benchmark tuning (step 6, using only the cases that are not held out):
+- typo suggestions show each name's page id, so the agent can read it at once;
+- a book chapter is also found by its title without its number ("1.5.2 Dropout" → "Dropout"), and where such a title differs from a Reference title only by case, the Reference spelling wins;
+- a phrase that matches a title only by ignoring case also lists the two best search results ("global variables" → Global Variables, plus Global Variables of the Terminal);
+- a question that names a class first offers that class's methods whose name words all appear in the question ("close an open position with CTrade" → CTrade::PositionClose);
+- words with two capitals (CTrade) count as API names in questions.
+
+How the benchmark treats 1.3.18 (its adapter is deleted after the switch): names go through `mql5_chm_lookup_identifiers`, other queries through `mql5_chm_search` with its default expansion, both with all books and three results; reads follow its `next_cursor`, which only its structured data carries, while only its plain text is counted. A tool error (it rejects `OrderSend()` and `CTrade.Buy`) counts as that case's answer. The cursor and counting choices favour 1.3.18, so v2's margin is, if anything, understated. The run stops when the two servers hold different CHM files, or when either can't answer an OrderSend lookup. `docs:update` and `setup` timings are measured by their own real runs (above), not by the benchmark.
 
 ### Declined, with reasons
 

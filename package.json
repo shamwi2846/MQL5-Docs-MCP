@@ -12,7 +12,8 @@
     "find": "node src/cli.mjs find",
     "docs:update": "node src/cli.mjs docs:update",
     "docs:status": "node src/cli.mjs docs:status",
-    "setup": "node src/setup.mjs"
+    "setup": "node src/setup.mjs",
+    "bench": "node bench/run.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

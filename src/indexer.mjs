@@ -284,6 +284,9 @@ function indexSource(statements, source, dir) {
       statements.section.run(id, page.title, section.heading, section.texts.join("\n"));
     }
     addName(page.title, id, "title");
+    // A book chapter is also found by its title without its number ("1.5.2 Dropout" → "Dropout").
+    const shortTitle = /^\d+(?:\.\d+)*\.?\s+(.+)$/.exec(page.title)?.[1];
+    if (shortTitle) addName(shortTitle, id, "keyword");
     for (const owner of owners) addName(`${owner}::${page.title}`, id, "member");
     for (const keyword of page.keywords) addName(keyword, id, "keyword");
   }

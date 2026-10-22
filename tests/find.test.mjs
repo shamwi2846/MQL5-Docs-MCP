@@ -1,6 +1,6 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -72,11 +72,52 @@ test("find: questions search, with phrase expansions as first candidates", () =>
   const [, named] = find("open a trade like matrix::CopyRates");
   assert.match(named.split("\n")[0], /best match: CopyRates · mql5\/matrix_copyrates$/, "an API the question names comes first");
   assert.match(named, /\nOther pages: OrderSend \(mql5\/ordersend\), Buy \(mql5\/ctradebuy\)$/);
+  const [, method] = find("how do I buy with CTrade");
+  assert.match(method.split("\n")[0], /best match: Buy · mql5\/ctradebuy$/, "a class the question names offers the method it asks for first");
+  assert.match(method, /\nOther pages: CTrade \(mql5\/ctrade\)/);
+});
+
+test("find: a phrase matching a title only by ignoring case also lists the best search results", () => {
+  const [, phrase] = find("sample fixed arrows");
+  const lines = phrase.split("\n");
+  assert.equal(lines[0], "= sample fixed arrows → spelling corrected to Sample fixed arrows · page · mql5/samplearrows");
+  assert.match(phrase, /\nOther pages: [^\n]*\(mql5\/[a-z_]+\)/);
+  assert.doesNotMatch(phrase, /Other pages: [^\n]*mql5\/samplearrows\)/, "not the page already shown");
+  const [, single] = find("ordersend");
+  assert.doesNotMatch(single, /Other pages/, "a single word is a name, not a phrase");
+});
+
+test("find: book chapters are found by their title without the number; the Reference spelling wins", () => {
+  const source = mkdtempSync(join(tmpdir(), "mql5-docs-books-"));
+  try {
+    const page = (title) => `<html><head><title>${title}</title></head><body><div id="help"><p class="p_Text"><span>About ${title}.</span></p></div></body></html>`;
+    const book = (dir, pages) => {
+      mkdirSync(dir);
+      for (const [file, title] of Object.entries(pages)) writeFileSync(join(dir, `${file}.htm`), page(title));
+      writeFileSync(join(dir, "toc.hhc"), `<ul>${Object.entries(pages).map(([file, title]) =>
+        `<li><object type="text/sitemap"><param name="Name" value="${title}"><param name="Local" value="${file}.htm"></object>`).join("")}</ul>`);
+      writeFileSync(join(dir, "keys.hhk"), "<ul></ul>");
+    };
+    book(join(source, "reference"), { data_input: "Data Input" });
+    book(join(source, "nn"), { "1_5_2_dropout": "1.5.2 Dropout", "1_8_data_input": "1.8 Data input" });
+    buildIndex(join(source, "index.sqlite"), [{ source: "mql5", dir: join(source, "reference") }, { source: "nn", dir: join(source, "nn") }]);
+    const bookDb = new DatabaseSync(join(source, "index.sqlite"), { readOnly: true });
+    try {
+      const [, dropout, input, typo] = blocksOf(findText(bookDb, ["Dropout", "data input", "Droout"], context));
+      assert.match(dropout, /^= Dropout · 1\.5\.2 Dropout · nn\/1_5_2_dropout\n/);
+      assert.match(input, /^= data input → spelling corrected to Data Input · page · mql5\/data_input\n/);
+      assert.equal(typo, "none · Droout · did you mean: Dropout (nn/1_5_2_dropout)?");
+    } finally {
+      bookDb.close();
+    }
+  } finally {
+    rmSync(source, { recursive: true, force: true });
+  }
 });
 
 test("find: typos get suggestions; nothing found says so", () => {
   const [, typo, nothing] = find("OrderSnd", "zzzz qqqq");
-  assert.equal(typo, "none · OrderSnd · did you mean: OrderSend?");
+  assert.equal(typo, "none · OrderSnd · did you mean: OrderSend (mql5/ordersend)?", "with the page to read");
   assert.equal(nothing, "none · zzzz qqqq · nothing matched; rephrase, or check mql5.com");
 });
 
