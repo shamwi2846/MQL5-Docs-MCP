@@ -3,8 +3,10 @@
 // Entries live in the registry file. registry.fail maps "<client> <verb>"
 // to the numbers of the calls that fail (1 = the first such call), so a test
 // can fail the new entry's add but let the restoring add succeed.
-// registry.unavailable lists clients that act as not installed. Like the
-// real claude, its -e takes every value up to the next option.
+// registry.unavailable lists clients that act as not installed.
+// registry.olderClaude makes claude report a missing entry as Claude Code
+// 2.1.114 does. Like the real claude, its -e takes every value up to the
+// next option.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const [, , file, client, ...args] = process.argv;
@@ -33,7 +35,8 @@ if (registry.fail?.[key]?.includes(registry.calls[key])) {
 if (verb === "get") {
   const entry = registry[client][rest[0]];
   if (!entry) {
-    out(client === "codex" ? `Error: No MCP server named '${rest[0]}' found.` : `No MCP server named "${rest[0]}". Configured servers:`);
+    if (client === "codex") out(`Error: No MCP server named '${rest[0]}' found.`);
+    else out(registry.olderClaude ? `No MCP server found with name: ${rest[0]}` : `No MCP server named "${rest[0]}". Configured servers:`);
     process.exit(1);
   }
   if (client === "codex") {

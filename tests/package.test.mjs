@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -57,7 +57,7 @@ function sandbox(root) {
   // Refuse to run if Windows can still find a real client with this PATH.
   // Paths are resolved first: CI's temp folder has a short 8.3 name
   // (RUNNER~1) while where.exe prints the long one.
-  const standIns = realpathSync.native(bin).toLowerCase();
+  const standIns = `${realpathSync.native(bin).toLowerCase()}${sep}`;
   for (const name of ["claude", "codex"]) {
     const found = spawnSync("where.exe", [name], { env, encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
     const outside = found.filter((file) => !realpathSync.native(file).toLowerCase().startsWith(standIns));

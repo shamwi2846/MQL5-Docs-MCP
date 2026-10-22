@@ -2,7 +2,7 @@
 //   npm run find -- <query> [query ...]   prints exactly what mql5_find returns
 //   npm run docs:update [-- --accept-loss]
 //   npm run docs:status
-import { dataDir, openIndex } from "./data.mjs";
+import { dataDir, isEntry, openIndex } from "./data.mjs";
 
 const USAGE = "Usage: npm run find -- <query> [query ...] | npm run docs:update [-- --accept-loss] | npm run docs:status";
 
@@ -49,4 +49,4 @@ export async function runCommand(command, args, { dir = dataDir(), log = console
   }
 }
 
-if (import.meta.main) process.exitCode = await runCommand(process.argv[2], process.argv.slice(3));
+if (isEntry(import.meta)) process.exitCode = await runCommand(process.argv[2], process.argv.slice(3));
