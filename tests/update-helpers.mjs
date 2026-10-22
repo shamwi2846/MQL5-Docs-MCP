@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { SCHEMA_VERSION, VERSION } from "../src/data.mjs";
 import { buildIndex } from "../src/indexer.mjs";
 
@@ -71,3 +72,30 @@ export async function withData(check) {
 }
 
 export const files = (dir) => readdirSync(dir).sort();
+
+// Overwrites one page of an index so that its schema still reads but SQLite's
+// integrity check fails, and returns the damaged bytes (the caller records
+// their hash, so only that check can notice).
+export function damageIndex(file) {
+  const clean = readFileSync(file);
+  for (let page = 3; page < clean.length / 4096; page++) {
+    const bytes = Buffer.from(clean).fill(0xff, page * 4096, page * 4096 + 4096);
+    writeFileSync(file, bytes);
+    const db = new DatabaseSync(file, { readOnly: true });
+    let fails = false;
+    try {
+      db.prepare("select value from meta where key = 'schema_version'").get();
+      try {
+        fails = db.prepare("pragma integrity_check").get().integrity_check !== "ok";
+      } catch {
+        fails = true;
+      }
+    } catch {
+      // The schema doesn't read: not the damage wanted here.
+    } finally {
+      db.close();
+    }
+    if (fails) return bytes;
+  }
+  throw new Error("no page found whose damage only the integrity check notices");
+}

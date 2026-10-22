@@ -136,3 +136,48 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Increase the extra titles from six to at least 21; the existing assertion for every title will then detect the cutoff.
 - Log: 20261022004347-9d6bb7
 - Why skipped: labelled GAP by the reviewer; harm: Incomplete loss reports can pass the suite, leaving users without the full information needed to accept an update.
+
+## G16 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/setup.mjs:228-234
+- Problem: F5: Failed first installation leaves its newly built index behind
+- Trigger: A first installation builds its index, then registration fails before current.json exists.
+- Fix: Explicitly remove this run's built index when rollback leaves it unreferenced, including when current.json is missing. — test: Fail registration during a first installation and assert that no candidate index, work folder, app folder or owned lock remains.
+- Log: 20261022005619-23cb58
+- Why skipped: pair: confirmed by B
+
+## G17 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: .github/workflows/ci.yml:33-39
+- Problem: F6: Windows CI implicitly uses PowerShell
+- Trigger: GitHub Actions executes the Windows job's run steps.
+- Fix: Set defaults.run.shell to cmd for the job.
+- Log: 20261022005619-23cb58
+- Why skipped: pair: both
+
+## G18 · fixed · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/setup.mjs:204-206
+- Problem: F9: Check SQLite integrity before reusing an index
+- Trigger: Setup evaluates a same-builder index whose hash and schema match but whose SQLite integrity check fails.
+- Fix: Require PRAGMA integrity_check to return ok before reusing the index; rebuild if it fails or throws.
+- Log: 20261022005619-23cb58
+- Why skipped: pair: confirmed by A
+
+## G19 · fixed · 2026-10-22 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: README.md:18
+- Problem: F1: Describe registration rollback as best effort
+- Trigger: Registration fails and restoring a previous client entry also fails, as exercised by tests/setup.test.mjs:259-271.
+- Fix: Say setup attempts to restore previous registrations and reports any restoration failure with instructions to rerun setup.
+- Log: 20261022011840-1f77c6
+- Why skipped: labelled GAP by the reviewer; harm: The installation instructions promise recovery that setup cannot guarantee.
+
+## G20 · fixed · 2026-10-22 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: tests/package.test.mjs:26-46
+- Problem: F1: Complete the planned npm acceptance scenarios
+- Trigger: Use these tests as verification of T1–T4.
+- Fix: Add npm cases with both client stand-ins: install from a temporary checkout with spaces and network blocked; run uninstall and purge against separately seeded installations; reject Codex registration after Claude succeeds and verify both previous entries, old files and protected sentinels.
+- Log: 20261022012712-18db04
+- Why skipped: pair: both

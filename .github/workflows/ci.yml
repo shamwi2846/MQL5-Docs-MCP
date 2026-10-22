@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests on Windows, Node 24
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Check out source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 24.17.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.17.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      # The real-docs tests skip here: the MetaQuotes docs can't be in the
+      # repository. hh.exe, the downloads and both clients are stand-ins.
+      - name: Run the tests
+        run: npm test

@@ -6,6 +6,19 @@ Status: in development. What it will be and why is in [DESIGN.md](DESIGN.md); th
 
 The documentation itself is MetaQuotes content: it is downloaded from mql5.com onto your own PC and never stored in this repository.
 
+## Install
+
+Windows with Node 24, and Claude Code and/or Codex installed. From a checkout:
+
+```
+npm ci
+npm run setup
+```
+
+Setup copies the server to `%LOCALAPPDATA%\mql5-docs-mcp\app\`, downloads and indexes the documentation into `%LOCALAPPDATA%\mql5-docs-mcp\data\`, checks the result, and registers the `mql5-docs` server with each client it finds. If a step fails, setup tries to put the previous registrations back; if it can't, it says which client is in what state and to run `npm run setup` again, which repairs it. Restart Claude Code and Codex afterwards.
+
+`npm run setup -- --uninstall` removes the registrations and app folders and keeps the documentation data; add `--purge` to delete that too.
+
 ## Development
 
 Requires Node 24.
