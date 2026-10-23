@@ -1,6 +1,6 @@
 {
   "name": "mql5-docs-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Local read-only MCP server with answer cards from the official MQL5 documentation, for Claude Code and Codex.",
   "type": "module",

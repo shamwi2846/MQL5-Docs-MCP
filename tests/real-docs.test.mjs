@@ -72,6 +72,17 @@ test("real docs: section notes start with their own lead-in, not the next sectio
   assert.match(notesOf("ORDER_TIME_GTC", "mql5/orderproperties"), /^The order validity period can be set in the type_time field/);
 });
 
+test("real docs: later declarations of a page's own function stay in its card", { skip }, () => {
+  const card = (pageId) => db.prepare("select full, brief from cards where page_id = ?").get(pageId);
+  const color = card("mql5/caxiscolor");
+  assert.match(color.full, /\nSets the axis color\.\nvoid {2}Color\(/, "the setter after the getter");
+  assert.match(color.brief, /^color Color\(\) \(\+1 overloads\)/);
+  assert.match(card("mql5/ontesterinit").full, /\nvoid {2}OnTesterInit\(void\);\n/, "the old void form");
+  assert.equal((card("mql5/graphplot").full.match(/^string {2}GraphPlot\(/gm) ?? []).length, 10, "all ten overloads");
+  assert.equal((card("mql5/cchartobjectsetdouble").full.match(/^bool {2}SetDouble\(/gm) ?? []).length, 2, "the overload under Parameters");
+  assert.equal((card("mql5/matrix_gemm").full.match(/^bool (matrix|vector)<T>::GeMM\(/gm) ?? []).length, 4, "the template forms in the Note");
+});
+
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);

@@ -76,6 +76,36 @@ test("a method card names overloads and keeps their headings", () => {
   assert.match(card.brief, /^int Copy\(int start\); \(\+1 overloads\)\n/);
 });
 
+test("a setter declared after its getter stays in the card; an example call is still cut", () => {
+  const card = pageCard({ id: "mql5/csamplecolor", title: "Color", member: 1 }, blocksOf(
+    ["paragraph", "Returns the sample color."],
+    ["code", "color  Color()"],
+    ["heading", "Return Value"], ["paragraph", "Sample color."],
+    ["paragraph", "Sets the sample color."],
+    ["code", "void  Color(\n   const color  clr      // sample color\n   )"],
+    ["heading", "Parameters"], ["paragraph", "clr"], ["paragraph", "[in] Sample color."],
+    ["heading", "Note"], ["paragraph", "Example:"], ["code", "Color(clrRed);"],
+  ), resolveName);
+  assert.match(card.full, /\nSets the sample color\.\nvoid {2}Color\(\n {3}const color {2}clr {6}\/\/ sample color\n {3}\)\nParameters:\n/);
+  assert.match(card.full, /\nNote:\nExample:\n\[code example cut, 14 characters: mql5_read id=mql5\/csamplecolor focus=Note\]$/);
+  assert.match(card.brief, /^color Color\(\) \(\+1 overloads\)\n/);
+});
+
+test("declarations under Parameters and owner-qualified template forms stay in the card", () => {
+  const card = pageCard({ id: "mql5/csampleset", title: "SetValue", member: 1 }, blocksOf(
+    ["paragraph", "Sets a sample value."],
+    ["paragraph", "Without a modifier"], ["code", "bool  SetValue(double value);"],
+    ["heading", "Parameters"], ["paragraph", "value"], ["paragraph", "[in] New value."],
+    ["paragraph", "With a modifier"], ["code", "bool  SetValue(int modifier, double value);"],
+    ["heading", "Parameters"], ["paragraph", "modifier"], ["paragraph", "[in] Index."],
+    ["heading", "Note"], ["paragraph", "Template forms:"],
+    ["code", "bool sample<T>::SetValue(T value);\nbool sample<T>::SetValue(int modifier, T value);"],
+    ["paragraph", "Example:"], ["code", "SetValue(1.0);"],
+  ), resolveName);
+  assert.match(card.full, /\nWith a modifier\nbool {2}SetValue\(int modifier, double value\);\nParameters:\nmodifier \[in\] Index\.\n/);
+  assert.match(card.full, /\nTemplate forms:\nbool sample<T>::SetValue\(T value\);\nbool sample<T>::SetValue\(int modifier, T value\);\nExample:\n\[code example cut, 14 characters/);
+});
+
 test("a brief card replaces a signature that does not fit by a read pointer", () => {
   const long = `void  Big(\n${Array.from({ length: 20 }, (_, i) => `   double  argument_number_${i},`).join("\n")}\n   );`;
   const card = pageCard({ id: "mql5/big", title: "Big", member: 0 }, blocksOf(

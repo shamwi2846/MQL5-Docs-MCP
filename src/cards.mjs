@@ -43,7 +43,9 @@ function groupByHeading(blocks) {
 }
 
 // A parameter name paragraph is followed by its description ("[in] ...").
-function parameterLines(blocks) {
+// Code is left out unless `shown` keeps it (the next overload's declaration,
+// as on CChartObject::SetDouble).
+function parameterLines(blocks, shown) {
   const lines = [];
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
@@ -52,7 +54,7 @@ function parameterLines(blocks) {
     if (isName && next?.kind === "paragraph" && next.text.startsWith("[")) {
       lines.push(`${block.text} ${next.text}`);
       i++;
-    } else if (block.kind !== "code") {
+    } else if (shown(block)) {
       lines.push(block.text);
     }
   }
@@ -69,10 +71,22 @@ function seeAlsoLine(blocks, resolveName) {
   }).join(", ");
 }
 
+// A code block that only declares the page's own function, each declaration
+// with a type before the name, which may carry its owner: a setter after its
+// getter (CAxis::Color), OnTesterInit's old void form, GeMM's template forms
+// ("bool matrix<T>::GeMM(..."). It is part of the card, not an example; a call
+// such as "SampleSend(1);" is not a declaration.
+function declaresOnly(code, name) {
+  if (!name || code.includes("{")) return false;
+  const declaration = new RegExp(`^\\s*(?:[\\w:<>,&*\\[\\]]+\\s+)+[&*]?(?:[\\w<>,]+::)*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`);
+  return splitDeclarations(code).every((part) => declaration.test(part.replace(/\/\/.*$/gm, "")));
+}
+
 // Everything after the declarations except See also and code examples:
 // Parameters, Return Value, Note and any further headings, which on many
-// pages are warnings ("The symbol should be selected by Name method.").
-function bodyLines(blocks, id, resolveName) {
+// pages are warnings ("The symbol should be selected by Name method."). Later
+// declarations of the page's own function (`name`) stay in place.
+function bodyLines(blocks, id, resolveName, name = null) {
   const lines = [];
   let seeAlso = null;
   for (const group of groupByHeading(blocks)) {
@@ -80,10 +94,12 @@ function bodyLines(blocks, id, resolveName) {
       seeAlso = seeAlsoLine(group.blocks, resolveName);
       continue;
     }
+    const example = (block) => block.kind === "code" && !declaresOnly(block.text, name);
+    const shown = (block) => !example(block);
     if (group.heading) lines.push(`${group.heading}:`);
-    lines.push(...(group.heading === "Parameters" ? parameterLines(group.blocks) : group.blocks
-      .filter((block) => block.kind !== "code").map((block) => block.text)));
-    const codes = group.blocks.filter((block) => block.kind === "code");
+    lines.push(...(group.heading === "Parameters" ? parameterLines(group.blocks, shown) : group.blocks
+      .filter(shown).map((block) => block.text)));
+    const codes = group.blocks.filter(example);
     if (codes.length) lines.push(codeMarker(codes, id, group.heading || "Example"));
   }
   if (seeAlso) lines.push(seeAlso);
@@ -149,14 +165,16 @@ function briefOf(page, signature, overloads, sentences) {
 function functionCard(page, blocks, resolveName) {
   const end = introEnd(blocks);
   const intro = blocks.slice(0, end);
-  const signatures = intro.filter((block) => block.kind === "code")
+  const name = page.title.split("::").pop();
+  const later = blocks.slice(end).filter((block) => block.kind === "code" && declaresOnly(block.text, name));
+  const signatures = [...intro.filter((block) => block.kind === "code"), ...later]
     .flatMap((block) => splitDeclarations(block.text)).filter((declaration) => declaration.includes("("));
   const returnValue = blocks.find((block) => block.kind === "paragraph" && block.heading === "Return Value");
   const description = intro.find((block) => block.kind === "paragraph");
   return {
     name: page.title,
     kind: page.member ? "method" : "function",
-    full: [...introLines(intro), ...bodyLines(blocks.slice(end), page.id, resolveName)].join("\n"),
+    full: [...introLines(intro), ...bodyLines(blocks.slice(end), page.id, resolveName, name)].join("\n"),
     brief: briefOf(page, signatures[0], signatures.length, [
       description && firstSentence(description.text),
       returnValue && `Returns: ${firstSentence(returnValue.text)}`,
