@@ -83,6 +83,14 @@ test("real docs: later declarations of a page's own function stay in its card", 
   assert.equal((card("mql5/matrix_gemm").full.match(/^bool (matrix|vector)<T>::GeMM\(/gm) ?? []).length, 4, "the template forms in the Note");
 });
 
+test("real docs: enum and property answers show the asked part", { skip }, () => {
+  const context = { tag: "realtst", downloaded: "today" };
+  const [, filling, buffers, file] = findText(db, ["ENUM_ORDER_TYPE_FILLING", "indicator_buffers", "tester_file"], context).split("\n\n");
+  assert.match(filling, /In case of pending orders, the ORDER_FILLING_RETURN filling type should be used regardless/, "the section's last rule");
+  assert.match(buffers, /\nindicator_buffers \| int \| /);
+  assert.match(file, /\ntester_file \| string \| /);
+});
+
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);

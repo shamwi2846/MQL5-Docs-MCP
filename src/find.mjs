@@ -10,7 +10,6 @@ const MAX_QUERIES = 16;
 const BRIEF_BLOCK = 480;
 const QUERY_ECHO = 100;
 const PASSAGE = 800;
-const ANCHOR_PASSAGE = 3000;
 const MAX_ALSO = 5;
 const STOPWORDS = new Set(["a", "an", "and", "are", "can", "do", "does", "for", "from", "get", "how", "i", "in", "is",
   "it", "me", "my", "of", "on", "or", "the", "to", "use", "what", "when", "which", "with"]);
@@ -120,13 +119,18 @@ function answerName(db, query, resolved) {
     };
   }
   // An anchored name (an enum) gets its own section, from the anchor to the
-  // next heading or anchor; any other page its start.
+  // next heading or anchor, up to one read page, so a rule at its end stays
+  // (RETURN for pending orders). Any other name starts where the page has it
+  // (a #property name's own row), a page's own title at the page start.
   const blocks = blocksOfPage(db, winner.page_id);
   const anchorAt = winner.anchor ? blocks.findIndex((block) => block.anchors.includes(winner.anchor)) : -1;
+  const nameAt = anchorAt < 0 && name !== info.title ? focusStart(db, winner.page_id, blocks, name) : -1;
   const shown = anchorAt >= 0
-    ? passage(winner.page_id, blocks.slice(0, sectionEnd(blocks, anchorAt)), anchorAt, ANCHOR_PASSAGE, name)
-    : passage(winner.page_id, blocks, 0, PASSAGE, null);
-  return { outcome, key: `passage:${winner.page_id}:${anchorAt}`, ...shown, also, readId: winner.page_id };
+    ? passage(winner.page_id, blocks.slice(0, sectionEnd(blocks, anchorAt)), anchorAt, PAGE_SIZE, name)
+    : passage(winner.page_id, blocks, Math.max(nameAt, 0), PASSAGE, nameAt >= 0 ? name : null);
+  // A section answer ends at its section, so it never stands in for a page passage that starts at the same place.
+  const key = anchorAt >= 0 ? `section:${winner.page_id}:${anchorAt}` : `passage:${winner.page_id}:${Math.max(nameAt, 0)}`;
+  return { outcome, key, ...shown, also, readId: winner.page_id };
 }
 
 const wordsOf = (text) => text.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
@@ -147,15 +151,22 @@ function methodsAsked(db, owner, words) {
     .slice(0, MAX_METHODS).map((row) => row.page_id);
 }
 
-// A question's search words without stopwords, and its candidate pages: API
-// names the question writes first (a class preceded by its methods the
-// question asks for), then phrase expansions, whose terms that are names add
-// their main page in the listed order ("indicator buffer values" →
-// CopyBuffer, SetIndexBuffer); other terms add search words. The question's
+// Product names say nothing in a question (every page is about MetaTrader 5),
+// and the Python-integration pages repeat them: "in MetaTrader 5" pulled
+// those pages ahead of the MQL5 page that answers. A version number after the
+// name ("MetaTrader 5", "MQL 5") goes with it.
+const PRODUCT_NAMES = new Set(["metatrader", "mt5", "mql5", "mql"]);
+const productName = (word, before) => PRODUCT_NAMES.has(word) || (/^\d$/.test(word) && (before === "metatrader" || before === "mql"));
+
+// A question's search words without stopwords and product names, and its
+// candidate pages: API names the question writes first (a class preceded by
+// its methods the question asks for), then phrase expansions, whose terms that
+// are names add their main page in the listed order ("indicator buffer values"
+// → CopyBuffer, SetIndexBuffer); other terms add search words. The question's
 // own words are always kept.
 function questionTerms(db, query) {
   const words = wordsOf(query);
-  const kept = words.filter((word) => !STOPWORDS.has(word));
+  const kept = words.filter((word, i) => !STOPWORDS.has(word) && !productName(word, words[i - 1]));
   const terms = new Set(kept.length ? kept : words);
   const pages = (query.match(/[A-Za-z_]\w*(?:::\w+)?/g) ?? []).filter((word) => API_NAME.test(word))
     .flatMap((word) => {
