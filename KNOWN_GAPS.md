@@ -290,7 +290,7 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Log: recorded by hand
 - Why skipped: Only after a typo in a developer tool; no money, data or security at stake, and the run's console report is complete either way. Argument parsing is unchanged in behavior by this PR.
 
-## G33 · open · 2026-10-23 · LOW
+## G33 · fixed · 2026-10-23 · LOW
 - Task: Implement MQL5 Docs MCP v2
 - Where: DECISIONS.md:122
 - Problem: F3: Complete the required skill fallback rule
