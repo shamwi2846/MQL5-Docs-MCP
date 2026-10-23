@@ -296,6 +296,70 @@ ${texts.map((text) => `<p class="p_Text"><span>${text}</span></p>`).join("\n")}<
   }, { book });
 });
 
+test("find: \"in MetaTrader 5\" does not pull a page that only repeats the product name", () => {
+  const page = (title, ...texts) => `<html><head><title>${title}</title></head><body><div id="help"><p class="p_H1"><span>${title}</span></p>
+${texts.map((text) => `<p class="p_Text"><span>${text}</span></p>`).join("\n")}</div></body></html>`;
+  const pages = {
+    python: page("Sample Python Integration", "The MetaTrader 5 package connects Python to MetaTrader 5.",
+      "Use the MetaTrader 5 terminal from Python; the MetaTrader 5 module returns positions."),
+    close: page("SampleClose", "Closes an open position by its ticket.", "Check the result after closing the position."),
+  };
+  for (let i = 0; i < 3; i++) pages[`notes${i}`] = page(`Sample Notes ${i}`, "Orders and deals are listed in the history.");
+  withPages(pages, (pageDb) => {
+    const [, answer] = blocksOf(findText(pageDb, ["How do I close a position in MetaTrader 5"], context));
+    assert.match(answer, /best match: SampleClose · mql5\/close\n/);
+  });
+});
+
+test("find: an enum section that fits one read page is shown whole", () => {
+  // Twelve rows of about 280 characters: a section between the old 3,000 limit and one read page.
+  const rows = Array.from({ length: 12 }, (_, i) =>
+    `<tr><td><p><span>SAMPLE_FILL_${i}</span></p></td><td><p><span>Sample fill policy ${i}, ${"described with enough words for a long row. ".repeat(6)}</span></p></td></tr>`);
+  const enums = `<html><head><title>Sample Properties</title></head><body><div id="help"><p class="p_H1"><span>Sample Properties</span></p>
+<p class="p_Text"><a name="enum_sample_fill"></a><span>ENUM_SAMPLE_FILL</span></p>
+<table><thead><tr><th><p><span>Identifier</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>${rows.join("")}</tbody></table>
+<p class="p_Text"><span>In case of pending orders, the last sample rule applies regardless of the mode.</span></p>
+<p class="p_Text"><span>The next enumeration sets the sample validity.</span></p>
+<p class="p_Text"><a name="enum_next"></a><span>ENUM_NEXT</span></p></div></body></html>`;
+  const hhk = '<ul><li><object type="text/sitemap"><param name="Name" value="ENUM_SAMPLE_FILL"><param name="Local" value="enums.htm#enum_sample_fill"></object></ul>';
+  withPages({ enums }, (pageDb) => {
+    const [, answer] = blocksOf(findText(pageDb, ["ENUM_SAMPLE_FILL"], context));
+    assert.ok(answer.length > 3000 && answer.length < 4200, `${answer.length}`);
+    assert.match(answer, /\nIn case of pending orders, the last sample rule applies regardless of the mode\.$/);
+  }, { hhk });
+});
+
+test("find: names without a card or anchor each start at their own row", () => {
+  const props = `<html><head><title>Sample Properties Page</title></head><body><div id="help"><p class="p_H1"><span>Sample Properties Page</span></p>
+<p class="p_Text"><span>Every sample program can set properties that the terminal reads.</span></p>
+<table><thead><tr><th><p><span>Constant</span></p></th><th><p><span>Type</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>
+<tr><td><p><span>sample_buffers</span></p></td><td><p><span>int</span></p></td><td><p><span>Number of sample buffers.</span></p></td></tr>
+<tr><td><p><span>sample_file</span></p></td><td><p><span>string</span></p></td><td><p><span>File passed to the sample tester.</span></p></td></tr>
+</tbody></table></div></body></html>`;
+  const hhk = ["sample_buffers", "sample_file"].map((name) =>
+    `<li><object type="text/sitemap"><param name="Name" value="${name}"><param name="Local" value="props.htm"></object>`).join("");
+  withPages({ props }, (pageDb) => {
+    const [, buffers, file] = blocksOf(findText(pageDb, ["sample_buffers", "sample_file"], context));
+    assert.match(buffers, /^= sample_buffers · Sample Properties Page · mql5\/props\n.*\nsample_buffers \| int \| Number of sample buffers\./s);
+    assert.match(file, /^= sample_file · Sample Properties Page · mql5\/props\n.*\nsample_file \| string \| File passed to the sample tester\./s);
+    assert.doesNotMatch(file, /shown above/);
+  }, { hhk: `<ul>${hhk}</ul>` });
+});
+
+test("find: a section answer and its page's answer starting at the same place are both shown", () => {
+  const types = `<html><head><title>Sample Types</title></head><body><div id="help"><p class="p_H1"><span>Sample Types</span></p>
+<p class="p_Text"><a name="sample_char"></a><span>The sample char type holds one character.</span></p>
+<p class="p_BoldTitles"><span>Other types</span></p>
+<p class="p_Text"><span>The other sample types hold numbers.</span></p></div></body></html>`;
+  const hhk = '<ul><li><object type="text/sitemap"><param name="Name" value="sample_char"><param name="Local" value="types.htm#sample_char"></object></ul>';
+  withPages({ types }, (pageDb) => {
+    const [, char, page] = blocksOf(findText(pageDb, ["sample_char", "Sample Types"], context));
+    assert.match(char, /\nThe sample char type holds one character\.$/, "the section ends before Other types");
+    assert.doesNotMatch(page, /shown above/);
+    assert.match(page, /\nThe other sample types hold numbers\./);
+  }, { hhk });
+});
+
 test("find: a brief never cuts a signature", () => {
   // A long name echoed in a long query leaves less room than the stored
   // signature needs (it is under the 240 characters a brief keeps).
