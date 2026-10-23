@@ -174,28 +174,75 @@ function questionTerms(db, query) {
   return { terms: [...terms], pages };
 }
 
-// Full-text search over all books with a modest boost for the Reference,
-// merged per page, best first.
+// How rare a word is across all sections (inverse document frequency),
+// counted once per index.
+const sectionCounts = new WeakMap();
+function rarity(db, term) {
+  if (!sectionCounts.has(db)) sectionCounts.set(db, { total: db.prepare("select count(*) as n from sections").get().n, terms: new Map() });
+  const counts = sectionCounts.get(db);
+  if (!counts.terms.has(term)) counts.terms.set(term, db.prepare("select count(*) as n from sections where sections match ?").get(`"${term}"`).n);
+  return Math.log((counts.total + 1) / (counts.terms.get(term) + 1));
+}
+
+// Full-text search over all books, merged per page by its best section, best
+// first. A section keeps a modest boost for the Reference and loses up to half
+// its score when it lacks the question's rarer words, so an overview that only
+// shares "calendar functions available" doesn't beat the book page that
+// answers "... in the tester".
+const MISSING_WORDS = 0.5;
 function searchPages(db, terms) {
   if (!terms.length) return [];
+  const weights = new Map(terms.map((term) => [term, rarity(db, term)]));
+  const total = [...weights.values()].reduce((sum, weight) => sum + weight, 0) || 1;
   const match = terms.map((term) => `"${term}"`).join(" OR ");
-  const rows = db.prepare(`select s.page_id, bm25(sections, 0, 10, 5, 1) as score, p.source
+  const rows = db.prepare(`select s.page_id, s.title || ' ' || s.heading || ' ' || s.body as text,
+    bm25(sections, 0, 10, 5, 1) as score, p.source
     from sections s join pages p on p.id = s.page_id where sections match ? order by score limit 200`).all(match);
   const best = new Map();
   for (const row of rows) {
-    const score = row.score * (row.source === "mql5" ? 1.25 : 1);
+    const words = new Set(wordsOf(row.text));
+    const found = terms.reduce((sum, term) => sum + (words.has(term) ? weights.get(term) : 0), 0);
+    const score = row.score * (row.source === "mql5" ? 1.25 : 1) * MISSING_WORDS ** (1 - found / total);
     if (!best.has(row.page_id) || score < best.get(row.page_id)) best.set(row.page_id, score);
   }
   return [...best].sort((a, b) => a[1] - b[1]).map(([id]) => id);
 }
 
+// Where a question's passage starts: the prose block that best covers the
+// question's words the page title doesn't already hold (each counting 1 plus
+// its rarity), with its section heading counted too, so a section about the
+// topic beats a contents line. Words match singular or plural ("Testing
+// Trading Strategies" holds "strategy"). Code never counts ("long" in a
+// declaration). The focus lets mql5_read start at the same place.
+const singular = (word) => word.replace(/ies$/, "y").replace(/(?<!s)s$/, "");
+const singularWords = (text) => new Set(wordsOf(text).map(singular));
+function passageStart(db, page, blocks, terms) {
+  const title = singularWords(page.title);
+  const asked = terms.filter((term) => !title.has(singular(term))).sort((a, b) => rarity(db, b) - rarity(db, a));
+  const weight = (text) => {
+    const words = singularWords(text);
+    return asked.reduce((sum, term) => sum + (words.has(singular(term)) ? 1 + rarity(db, term) : 0), 0);
+  };
+  let start = -1;
+  let best = 0;
+  blocks.forEach((block, i) => {
+    if (block.kind === "code" || block.kind === "heading") return;
+    const score = weight(block.text) + weight(block.heading);
+    if (score > best) [best, start] = [score, i];
+  });
+  if (start < 0) return { start: 0, focus: null };
+  const term = asked.find((word) => wordsOf(blocks[start].text).includes(word));
+  return { start, focus: term && focusStart(db, page.id, blocks, term) === start ? term : blocks[start].heading || null };
+}
+
 // Questions: candidates from the question's API names and expansions first,
-// then search; the top page shows its card or a passage around the matching
-// words, the next two are listed.
+// then search; the top page shows its card or the passage that covers the
+// question best, the next two are listed.
 function answerQuestion(db, query) {
   const { terms, pages } = questionTerms(db, query);
   if (!terms.length) return null;
-  const [first, ...rest] = [...new Set([...pages, ...searchPages(db, terms)])].slice(0, 3).map((id) => ({ id, title: pageTitle(db, id).title }));
+  const [first, ...rest] = [...new Set([...pages, ...searchPages(db, terms)])].slice(0, 3)
+    .map((id) => ({ id, title: pageTitle(db, id).title }));
   if (!first) return null;
   const card = db.prepare("select name, kind, full, brief from cards where page_id = ? and kind <> 'constant'").get(first.id);
   const outcome = `~ ${echo(query)} · no exact name; best match: ${first.title} · ${first.id}`;
@@ -207,16 +254,10 @@ function answerQuestion(db, query) {
     };
   }
   const blocks = blocksOfPage(db, first.id);
-  let start = -1;
-  let focus = null;
-  for (const term of terms) {
-    start = focusStart(db, first.id, blocks, term);
-    if (start >= 0) {
-      focus = term;
-      break;
-    }
-  }
-  return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, Math.max(start, 0), PASSAGE, focus), also: others, readId: first.id };
+  // The question's own words place the passage; words from expansions only find pages.
+  const asked = wordsOf(query);
+  const { start, focus } = passageStart(db, first, blocks, terms.filter((term) => asked.includes(term)));
+  return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, start, PASSAGE, focus), also: others, readId: first.id };
 }
 
 // Typo fallback: names within two edits, loaded only the first time it is

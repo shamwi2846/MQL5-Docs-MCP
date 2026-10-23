@@ -152,16 +152,28 @@ ${note}</div></body></html>`;
 }
 
 // Pages are keyed by file name; each is listed in the table of contents
-// unless `toc` is given. `hhk` is the keyword index.
-function withPages(pages, check, { toc, hhk = "<ul></ul>" } = {}) {
+// unless `toc` is given. `hhk` is the keyword index. `book` pages form a
+// second source, a book next to the Reference.
+function withPages(pages, check, { toc, hhk = "<ul></ul>", book } = {}) {
   const source = mkdtempSync(join(tmpdir(), "mql5-docs-budget-"));
-  try {
-    const entries = Object.keys(pages).map((file) =>
+  const writeSource = (dir, files, contents) => {
+    const entries = Object.keys(files).map((file) =>
       `<li><object type="text/sitemap"><param name="Name" value="${file}"><param name="Local" value="${file}.htm"></object>`);
-    for (const [file, html] of Object.entries(pages)) writeFileSync(join(source, `${file}.htm`), html);
-    writeFileSync(join(source, "sample.hhc"), toc ?? `<ul>${entries.join("\n")}</ul>`);
+    for (const [file, html] of Object.entries(files)) writeFileSync(join(dir, `${file}.htm`), html);
+    writeFileSync(join(dir, "sample.hhc"), contents ?? `<ul>${entries.join("\n")}</ul>`);
+  };
+  try {
+    writeSource(source, pages, toc);
     writeFileSync(join(source, "sample.hhk"), hhk);
-    buildIndex(join(source, "index.sqlite"), [{ source: "mql5", dir: source }]);
+    const sources = [{ source: "mql5", dir: source }];
+    if (book) {
+      const dir = join(source, "book");
+      mkdirSync(dir);
+      writeSource(dir, book);
+      writeFileSync(join(dir, "sample.hhk"), "<ul></ul>");
+      sources.push({ source: "book", dir });
+    }
+    buildIndex(join(source, "index.sqlite"), sources);
     const pageDb = new DatabaseSync(join(source, "index.sqlite"), { readOnly: true });
     try {
       check(pageDb);
@@ -236,6 +248,45 @@ ${paragraphs.join("\n")}</div></body></html>`;
     assert.match(lines[3], /^Paragraph 5 explains execution\./);
     assert.equal(lines.at(-1), "more: mql5_read id=mql5/guide focus=execution", "not the unmatched first word");
   });
+});
+
+test("find: a question's passage starts where the question is covered, never in code", () => {
+  const guide = `<html><head><title>Storage Guide</title></head><body><div id="help"><p class="p_H1"><span>Storage Guide</span></p>
+<p class="p_Text"><span>This guide describes the sample store.</span></p>
+<div><table><tr><td><p class="p_CodeExample"><span>long  SampleTotal();</span></p></td></tr></table></div>
+<p class="p_BoldTitles"><span>Keeping values</span></p>
+<p class="p_Text"><span>Sample values are kept for 4 weeks since the last access.</span></p></div></body></html>`;
+  withPages({ guide }, (pageDb) => {
+    const lines = findText(pageDb, ["How long are sample values kept"], context).split("\n");
+    assert.equal(lines[2], "~ How long are sample values kept · no exact name; best match: Storage Guide · mql5/guide");
+    assert.deepEqual(lines.slice(3, 5), ["Keeping values:", "Sample values are kept for 4 weeks since the last access."], "not the declaration that holds \"long\"");
+  });
+});
+
+test("find: a book chapter with the question's rarer word beats a Reference overview without it", () => {
+  // As with "Are economic calendar functions available in the Strategy
+  // Tester": the overview shares the topic words, the long chapter also says
+  // what the question asks.
+  const page = (title, ...texts) => `<html><head><title>${title}</title></head><body><div id="help"><p class="p_H1"><span>${title}</span></p>
+${texts.map((text) => `<p class="p_Text"><span>${text}</span></p>`).join("\n")}</div></body></html>`;
+  const reference = {
+    calendar: page("Sample Calendar", "This section describes the sample calendar functions available directly in the platform.",
+      "All sample calendar functions use the server time."),
+  };
+  for (let i = 0; i < 4; i++) {
+    reference[`notes${i}`] = page(`Sample Notes ${i}`, "Sample functions are available in the platform.",
+      i === 0 ? "Programs also run in the tester." : "Programs also run on charts.");
+  }
+  const book = {
+    "7_3_calendar": page("7.3 Sample calendar", "When developing strategies, the built-in sample calendar helps. It is available in the program interface and through functions.",
+      "Sample calendar functions cannot be used in the tester: they fail with error 4014.", "Save the entries to files on a chart, then read them in the tester.",
+      ...Array.from({ length: 12 }, (_, i) => `Filler sentence ${i} about news events, importance levels and countries.`)),
+  };
+  withPages(reference, (pageDb) => {
+    const [, answer] = blocksOf(findText(pageDb, ["Are sample calendar functions available in the tester"], context));
+    assert.match(answer, /best match: 7\.3 Sample calendar · book\/7_3_calendar\nSample calendar functions cannot be used in the tester/);
+    assert.match(answer, /\nOther pages: Sample Calendar \(mql5\/calendar\)/);
+  }, { book });
 });
 
 test("find: a brief never cuts a signature", () => {
