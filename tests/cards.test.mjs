@@ -84,10 +84,10 @@ test("a setter declared after its getter stays in the card; an example call is s
     ["paragraph", "Sets the sample color."],
     ["code", "void  Color(\n   const color  clr      // sample color\n   )"],
     ["heading", "Parameters"], ["paragraph", "clr"], ["paragraph", "[in] Sample color."],
-    ["heading", "Note"], ["paragraph", "Example:"], ["code", "Color(clrRed);"],
+    ["heading", "Note"], ["paragraph", "Example:"], ["code", "Color(clrRed);"], ["code", "return Color(clrBlue);"],
   ), resolveName);
   assert.match(card.full, /\nSets the sample color\.\nvoid {2}Color\(\n {3}const color {2}clr {6}\/\/ sample color\n {3}\)\nParameters:\n/);
-  assert.match(card.full, /\nNote:\nExample:\n\[code example cut, 14 characters: mql5_read id=mql5\/csamplecolor focus=Note\]$/);
+  assert.match(card.full, /\nNote:\nExample:\n\[2 code examples cut, 36 characters: mql5_read id=mql5\/csamplecolor focus=Note\]$/, "calls and returns are examples");
   assert.match(card.brief, /^color Color\(\) \(\+1 overloads\)\n/);
 });
 

@@ -261,6 +261,13 @@ test("find: a question's passage starts where the question is covered, never in 
     assert.equal(lines[2], "~ How long are sample values kept · no exact name; best match: Storage Guide · mql5/guide");
     assert.deepEqual(lines.slice(3, 5), ["Keeping values:", "Sample values are kept for 4 weeks since the last access."], "not the declaration that holds \"long\"");
   });
+  const calendar = `<html><head><title>Sample Calendar</title></head><body><div id="help"><p class="p_H1"><span>Sample Calendar</span></p>
+<p class="p_Text"><span>A new sample value arrives every day.</span></p>
+<p class="p_Text"><span>The news arrive with their importance.</span></p></div></body></html>`;
+  withPages({ calendar }, (pageDb) => {
+    const lines = findText(pageDb, ["Where is the news"], context).split("\n");
+    assert.equal(lines[3], "The news arrive with their importance.", "\"news\" is not \"new\"");
+  });
 });
 
 test("find: a book chapter with the question's rarer word beats a Reference overview without it", () => {
