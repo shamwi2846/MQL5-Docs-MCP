@@ -214,7 +214,8 @@ function searchPages(db, terms) {
 // topic beats a contents line. Words match singular or plural ("Testing
 // Trading Strategies" holds "strategy"). Code never counts ("long" in a
 // declaration). The focus lets mql5_read start at the same place.
-const singular = (word) => word.replace(/ies$/, "y").replace(/(?<!s)s$/, "");
+// "news" is not the plural of "new".
+const singular = (word) => (word === "news" ? word : word.replace(/ies$/, "y").replace(/(?<!s)s$/, ""));
 const singularWords = (text) => new Set(wordsOf(text).map(singular));
 function passageStart(db, page, blocks, terms) {
   const title = singularWords(page.title);

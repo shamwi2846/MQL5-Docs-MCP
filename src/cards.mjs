@@ -75,10 +75,10 @@ function seeAlsoLine(blocks, resolveName) {
 // with a type before the name, which may carry its owner: a setter after its
 // getter (CAxis::Color), OnTesterInit's old void form, GeMM's template forms
 // ("bool matrix<T>::GeMM(..."). It is part of the card, not an example; a call
-// such as "SampleSend(1);" is not a declaration.
+// such as "SampleSend(1);" or "return Color(clrRed);" is not a declaration.
 function declaresOnly(code, name) {
   if (!name || code.includes("{")) return false;
-  const declaration = new RegExp(`^\\s*(?:[\\w:<>,&*\\[\\]]+\\s+)+[&*]?(?:[\\w<>,]+::)*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`);
+  const declaration = new RegExp(`^\\s*(?!(?:return|else)\\b)(?:[\\w:<>,&*\\[\\]]+\\s+)+[&*]?(?:[\\w<>,]+::)*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`);
   return splitDeclarations(code).every((part) => declaration.test(part.replace(/\/\/.*$/gm, "")));
 }
 
