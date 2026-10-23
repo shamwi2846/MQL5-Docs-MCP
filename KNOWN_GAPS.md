@@ -298,3 +298,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add the required instruction to the skill repository and record its completion.
 - Log: 20261023000739-97a3f0
 - Why skipped: labelled GAP by the reviewer; harm: The skill still permits declaring the claim unverified before checking the listed answer pages.
+
+## G34 · open · 2026-10-23 · LOW
+- Task: -
+- Where: src/cards.mjs:110
+- Problem: splitDeclarations makes a standalone 'template<typename T>' line its own part, so a later template declaration written on two lines would not count as a declaration of the page's function and would be cut like an example; titles such as 'ArrayBinarySearch<T>' would also not match their declarations (CodeRabbit, PR #3).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Never happens in the installed docs: no page titled X<T> has a later bodiless declaration, and every template-prefixed declaration is in a page's opening part, which the card always shows whole (checked on the real Reference index).
