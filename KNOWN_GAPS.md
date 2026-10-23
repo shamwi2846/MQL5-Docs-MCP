@@ -289,3 +289,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Only after a typo in a developer tool; no money, data or security at stake, and the run's console report is complete either way. Argument parsing is unchanged in behavior by this PR.
+
+## G33 · open · 2026-10-23 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: DECISIONS.md:122
+- Problem: F3: Complete the required skill fallback rule
+- Trigger: A question's first result does not answer it, but its listed Other pages do, as with real-gv-stored.
+- Fix: Add the required instruction to the skill repository and record its completion.
+- Log: 20261023000739-97a3f0
+- Why skipped: labelled GAP by the reviewer; harm: The skill still permits declaring the claim unverified before checking the listed answer pages.
