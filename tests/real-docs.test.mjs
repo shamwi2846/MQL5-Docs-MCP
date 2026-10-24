@@ -91,6 +91,16 @@ test("real docs: enum and property answers show the asked part", { skip }, () =>
   assert.match(file, /\ntester_file \| string \| /);
 });
 
+test("real docs: a name with its own section on another item's page gets that section", { skip }, () => {
+  const context = { tag: "realtst", downloaded: "today" };
+  const [, country, event, flags, open] = findText(db, ["MqlCalendarCountry", "MqlCalendarEvent", "ENUM_DATABASE_OPEN_FLAGS", "DatabaseOpen"], context).split("\n\n");
+  assert.match(country, /^= MqlCalendarCountry · struct · /);
+  assert.match(event, /\nstruct MqlCalendarEvent\n/);
+  assert.doesNotMatch(event, /struct MqlCalendarCountry/);
+  assert.match(flags, /\nDATABASE_OPEN_READONLY \| /);
+  assert.match(open, /^= DatabaseOpen · function · /);
+});
+
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);

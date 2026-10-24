@@ -1,5 +1,5 @@
 {
- "note": "Benchmark cases (DESIGN.md section 13). A case is complete when an expected page is named and each of its facts appears in text that belongs to that page; an absent case when no exact match is reported; an ambiguous case when at least two of its pages are named. Facts are short phrases from the pages; held_out cases were frozen before tuning and are never used for it. The extra- cases were added afterwards and are never held out; the real- cases are questions from the owner's chats (2026-10-22 and 23), also never held out.",
+ "note": "Benchmark cases (DESIGN.md section 13). A case is complete when an expected page is named and each of its facts appears in text that belongs to that page; an absent case when no exact match is reported; an ambiguous case when at least two of its pages are named. Facts are short phrases from the pages; held_out cases were frozen before tuning and are never used for it. The extra- cases were added afterwards and are never held out; the real- cases come from the owner's chats (2026-10-22 to 24), also never held out.",
  "cases": [
   {"id":"exact-OnTick","kind":"name","queries":["OnTick"],"expect":[{"page":"mql5/ontick","facts":["The function is called in EAs when"]}],"held_out":false},
   {"id":"exact-CopyBuffer","kind":"name","queries":["CopyBuffer"],"expect":[{"page":"mql5/copybuffer","facts":["Gets data of a specified buffer of"]}],"held_out":false},
@@ -104,6 +104,7 @@
   {"id":"real-gv-tester","kind":"question","queries":["Are global variables of the terminal available in the Strategy Tester"],"expect":[{"page":"mql5/testing","facts":["global variables of the client terminal are also emulated"]}],"held_out":false},
   {"id":"real-calendar-tester","kind":"question","queries":["Are economic calendar functions available in the Strategy Tester"],"expect":[{"page":"book/7_3_calendar","facts":["Calendar functions cannot be used in the tester"]}],"held_out":false},
   {"id":"real-gv-kept","kind":"question","queries":["GlobalVariableSet how long are global variables kept"],"expect":[{"page":"mql5/globalvariableset","facts":["4 weeks since their last use"]}],"held_out":false},
-  {"id":"real-pending-margin","kind":"question","queries":["Do pending orders reserve margin in MetaTrader 5?"],"expect":[{"page":"mql5/accountinformation","facts":["The amount reserved on an account to cover the margin of all pending orders"]}],"held_out":false}
+  {"id":"real-pending-margin","kind":"question","queries":["Do pending orders reserve margin in MetaTrader 5?"],"expect":[{"page":"mql5/accountinformation","facts":["The amount reserved on an account to cover the margin of all pending orders"]}],"held_out":false},
+  {"id":"real-calendar-event-struct","kind":"name","queries":["MqlCalendarEvent"],"expect":[{"page":"mql5/mqlcalendar","facts":["struct MqlCalendarEvent"]}],"held_out":false}
  ]
 }
