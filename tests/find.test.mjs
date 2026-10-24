@@ -360,6 +360,39 @@ test("find: a section answer and its page's answer starting at the same place ar
   }, { hhk });
 });
 
+test("find: a name with its own section on another item's page gets that section, not the other card", () => {
+  const code = (text) => `<div><table><tr><td><p class="p_CodeExample"><span>${text.replace(/\n/g, "<br>")}</span></p></td></tr></table></div>`;
+  const row = (id, text) => `<tr><td><p><span>${id}</span></p></td><td><p><span>${text}</span></p></td></tr>`;
+  const structs = `<html><head><title>Sample calendar structures</title></head><body><div id="help"><p class="p_H1"><span>Sample calendar structures</span></p>
+<p class="p_Text"><a name="samplecountry"></a><span>Countries are set by the SampleCountry structure.</span></p>
+${code("struct SampleCountry\n  {\n   ulong id;\n  };")}
+<p class="p_Text"><a name="sampleevent"></a><span>Events are set by the SampleEvent structure.</span></p>
+${code("struct SampleEvent\n  {\n   string event_code;\n  };")}
+<p class="p_Text"><a name="enum_sample_type"></a><span>ENUM_SAMPLE_TYPE</span></p>
+<table><thead><tr><th><p><span>Identifier</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>${row("SAMPLE_TYPE_EVENT", "An event")}</tbody></table>
+</div></body></html>`;
+  const open = `<html><head><title>SampleOpen</title></head><body><div id="help"><p class="p_H1"><span>SampleOpen</span></p>
+<p class="p_Function"><span>Opens a sample database.</span></p>
+${code("int  SampleOpen(\n   uint  flags      // flags\n   );")}
+<p class="p_BoldTitles"><span>Parameters</span></p><p><span>flags</span></p><p><span>[in] A combination of ENUM_SAMPLE_OPEN_FLAGS.</span></p>
+<p class="p_BoldTitles"><span>Return Value</span></p><p><span>The handle, or INVALID_HANDLE.</span></p>
+<p class="p_BoldTitles"><span>Note</span></p>
+<p class="p_Text"><a name="enum_sample_open_flags"></a><span>ENUM_SAMPLE_OPEN_FLAGS</span></p>
+<table><thead><tr><th><p><span>Identifier</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>${row("SAMPLE_OPEN_READONLY", "Read only")}</tbody></table>
+</div></body></html>`;
+  const keyword = (name, local) => `<li><object type="text/sitemap"><param name="Name" value="${name}"><param name="Local" value="${local}"></object>`;
+  const hhk = `<ul>${keyword("SampleCountry", "structs.htm#samplecountry")}${keyword("SampleEvent", "structs.htm#sampleevent")}${keyword("ENUM_SAMPLE_TYPE", "structs.htm#enum_sample_type")}${keyword("ENUM_SAMPLE_OPEN_FLAGS", "open.htm#enum_sample_open_flags")}</ul>`;
+  withPages({ structs, open }, (pageDb) => {
+    const [, country, event, type, flags, function_] = blocksOf(findText(pageDb, ["SampleCountry", "SampleEvent", "ENUM_SAMPLE_TYPE", "ENUM_SAMPLE_OPEN_FLAGS", "SampleOpen"], context));
+    assert.match(country, /^= SampleCountry · struct · mql5\/structs\nstruct SampleCountry/, "the card's own struct keeps the card");
+    assert.match(event, /^= SampleEvent · Sample calendar structures · mql5\/structs\n[^]*struct SampleEvent/);
+    assert.doesNotMatch(event, /struct SampleCountry|shown above/);
+    assert.match(type, /\nSAMPLE_TYPE_EVENT \| An event/);
+    assert.match(flags, /^= ENUM_SAMPLE_OPEN_FLAGS · SampleOpen · mql5\/open\n[^]*SAMPLE_OPEN_READONLY \| Read only/);
+    assert.match(function_, /^= SampleOpen · function · mql5\/open\n/, "the page's own function keeps the card");
+  }, { hhk });
+});
+
 test("find: a brief never cuts a signature", () => {
   // A long name echoed in a long query leaves less room than the stored
   // signature needs (it is under the 240 characters a brief keeps).

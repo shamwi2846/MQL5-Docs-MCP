@@ -96,7 +96,15 @@ function answerName(db, query, resolved) {
     return { outcome: `= ${echo(query)} · ${titledMembers.length} pages share this name: ${owners.join(", ")}${more}. Ask with Class::Method.` };
   }
   const winner = pages[0];
-  const card = cardOf(db, name, winner.page_id);
+  // A page's card describes one item (the calendar structures page's card is
+  // MqlCalendarCountry, a function page's card the function). A name with its
+  // own section further down the page (MqlCalendarEvent, an enum on a
+  // function page) answers with that section instead of the other item's card.
+  const pageCard = cardOf(db, name, winner.page_id);
+  const otherItem = pageCard && pageCard.kind !== "constant" && pageCard.name !== name && winner.anchor;
+  const blocks = !pageCard || otherItem ? blocksOfPage(db, winner.page_id) : null;
+  const anchorAt = blocks && winner.anchor ? blocks.findIndex((block) => block.anchors.includes(winner.anchor)) : -1;
+  const card = otherItem && anchorAt > 0 ? null : pageCard;
   const info = pageTitle(db, winner.page_id);
   const others = pages.slice(1);
   const alsoNamed = others.length
@@ -122,8 +130,6 @@ function answerName(db, query, resolved) {
   // next heading or anchor, up to one read page, so a rule at its end stays
   // (RETURN for pending orders). Any other name starts where the page has it
   // (a #property name's own row), a page's own title at the page start.
-  const blocks = blocksOfPage(db, winner.page_id);
-  const anchorAt = winner.anchor ? blocks.findIndex((block) => block.anchors.includes(winner.anchor)) : -1;
   const nameAt = anchorAt < 0 && name !== info.title ? focusStart(db, winner.page_id, blocks, name) : -1;
   const shown = anchorAt >= 0
     ? passage(winner.page_id, blocks.slice(0, sectionEnd(blocks, anchorAt)), anchorAt, PAGE_SIZE, name)
