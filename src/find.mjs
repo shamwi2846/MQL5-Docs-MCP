@@ -279,10 +279,12 @@ function passageStart(db, page, blocks, terms) {
 
 // Whether one prose block of a page, counted with its heading, holds every
 // word. Code never counts: a code example that calls an API says nothing
-// about the context it is asked in.
+// about the context it is asked in. Neither does a class's method catalogue,
+// which names methods without explaining them; other table rows do count (a
+// constant's row is its description).
 function proseHolds(db, pageId, words) {
   return blocksOfPage(db, pageId).some((block) => {
-    if (block.kind === "code") return false;
+    if (block.kind === "code" || CLASS_LAYOUT.test(block.heading)) return false;
     const found = new Set([...wordsOf(block.text), ...wordsOf(block.heading ?? "")]);
     return words.every((word) => found.has(word));
   });
@@ -294,10 +296,13 @@ function proseHolds(db, pageId, words) {
 // the API and the whole context (Testing Trading Strategies: "the CopyTicks
 // function allows receiving ticks outside the cache (only when testing on
 // real ticks)"); the API's page is listed next. A word the API page happens
-// to share ("ticks") doesn't keep it first.
+// to share ("ticks") doesn't keep it first. Another page the question names
+// that covers the context comes first instead ("OnDeinit when I use
+// ExpertRemove in optimization" → ExpertRemove).
 function contextPage(db, apiWords, named, context, searched) {
   if (!named.length || !context.length || proseHolds(db, named[0], context)) return null;
-  return searched.find((id) => !named.includes(id) && proseHolds(db, id, [...apiWords, ...context])) ?? null;
+  return named.find((id) => proseHolds(db, id, context))
+    ?? searched.find((id) => !named.includes(id) && proseHolds(db, id, [...apiWords, ...context])) ?? null;
 }
 
 // Questions: candidates from the question's API names and expansions first,

@@ -474,14 +474,22 @@ test("find: a question naming an API in a context its page lacks is answered whe
     // Ranks first for the tester words, but names the API only in code.
     tester: textPage("Sample Strategy Tester", "The strategy tester runs sample programs on history.",
       codeBlock("SampleTicks(_Symbol); // ticks in the strategy tester")),
+    // Ranks before the testing page too, but names the API only in its method catalogue.
+    testerClass: textPage("Strategy Tester Ticks Class", "This class controls the strategy tester.", heading("Class Methods by Groups"),
+      `<table><thead><tr><th><p><span>Method</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>
+<tr><td><p><span>SampleTicks</span></p></td><td><p><span>Gets ticks in the strategy tester</span></p></td></tr></tbody></table>`),
     testing: textPage("Testing Sample Programs", "Testing on history is fast.", heading("Using real ticks during a test"),
-      "Ticks are stored in the cache of the strategy tester. The SampleTicks function receives ticks outside the cache only when testing on real ticks."),
+      "Ticks are stored in the cache of the strategy tester. The SampleTicks function receives ticks outside the cache only when testing on real ticks, as SampleFeed does."),
+    feed: textPage("SampleFeed", "SampleFeed delivers ticks in the strategy tester."),
   };
   withPages(pages, (pageDb) => {
-    const [, tester, own] = blocksOf(findText(pageDb, ["SampleTicks ticks in the strategy tester", "SampleTicks ticks synchronized"], context));
+    const [, tester, own, second] = blocksOf(findText(pageDb, ["SampleTicks ticks in the strategy tester", "SampleTicks ticks synchronized",
+      "SampleTicks from SampleFeed ticks in the strategy tester"], context));
     assert.match(tester, /best match: Testing Sample Programs · mql5\/testing\nUsing real ticks during a test:\nTicks are stored in the cache/);
     assert.match(tester, /\nOther pages: SampleTicks \(mql5\/ticks\)/, "the API page is listed next");
     assert.match(own, /best match: SampleTicks · mql5\/ticks\n/, "a paragraph of the API page holds the whole context");
+    assert.match(second, /best match: SampleFeed · mql5\/feed\nSampleFeed delivers ticks in the strategy tester\.\nOther pages: SampleTicks \(mql5\/ticks\)/,
+      "another named page whose paragraph holds the context comes first");
   });
 });
 
