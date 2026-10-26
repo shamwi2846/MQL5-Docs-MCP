@@ -281,15 +281,19 @@ function passageStart(db, page, blocks, terms, chosen = -1) {
 }
 
 // The first prose block of a page that, counted with its heading, holds every
-// word, or -1. Code never counts: a code example that calls an API says
-// nothing about the context it is asked in. Neither does a class's method
-// catalogue, which names methods without explaining them; other table rows do
-// count (a constant's row is its description).
-function proseBlock(db, pageId, words) {
+// context word and names each API word in its own text, or -1 (the heading
+// may set the context, "Using real ticks during a test", but a heading that
+// names the API says nothing about it). Headings alone and code never count:
+// a code example that calls an API says nothing about the context it is
+// asked in. Neither does a class's method catalogue, which names methods
+// without explaining them; other table rows do count (a constant's row is its
+// description).
+function proseBlock(db, pageId, context, apiWords = []) {
   return blocksOfPage(db, pageId).findIndex((block) => {
-    if (block.kind === "code" || CLASS_LAYOUT.test(block.heading)) return false;
-    const found = new Set([...wordsOf(block.text), ...wordsOf(block.heading ?? "")]);
-    return words.every((word) => found.has(word));
+    if (block.kind === "code" || block.kind === "heading" || CLASS_LAYOUT.test(block.heading)) return false;
+    const own = new Set(wordsOf(block.text));
+    const found = new Set([...own, ...wordsOf(block.heading ?? "")]);
+    return apiWords.every((word) => own.has(word)) && context.every((word) => found.has(word));
   });
 }
 
@@ -310,7 +314,7 @@ function contextPage(db, apiWords, named, context, searched) {
     if (start >= 0) return { id, start };
   }
   for (const id of searched) {
-    const start = named.includes(id) ? -1 : proseBlock(db, id, [...apiWords, ...context]);
+    const start = named.includes(id) ? -1 : proseBlock(db, id, context, apiWords);
     if (start >= 0) return { id, start };
   }
   return null;

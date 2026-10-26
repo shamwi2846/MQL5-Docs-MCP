@@ -478,6 +478,8 @@ test("find: a question naming an API in a context its page lacks is answered whe
     testerClass: textPage("Strategy Tester Ticks Class", "This class controls the strategy tester.", heading("Class Methods by Groups"),
       `<table><thead><tr><th><p><span>Method</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>
 <tr><td><p><span>SampleTicks</span></p></td><td><p><span>Gets ticks in the strategy tester</span></p></td></tr></tbody></table>`),
+    // Names the API and the context only in a heading, with nothing about them below it.
+    headingOnly: textPage("Sample Tester Contents", heading("SampleTicks ticks in the strategy tester"), "See the chapter on real ticks."),
     // Its first section scores higher for the question's words, but never names the API.
     testing: textPage("Testing Sample Programs", heading("Strategy tester ticks"), "The strategy tester stores ticks; the strategy tester keeps ticks in its cache.",
       "Testing on history is fast.", heading("Using real ticks during a test"),
