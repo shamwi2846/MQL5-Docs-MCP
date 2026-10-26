@@ -191,7 +191,7 @@ test("a struct card takes its name from the definition and lists its fields", ()
     ["paragraph", "Fields description"],
     ["row", "volume | Requested volume in lots.", { header }],
     ["heading", "Note"], ["paragraph", "Fill every field."], ["code", "MqlSample r={};"],
-  ), resolveName);
+  ), resolveName, (name) => name === "MqlSample");
   assert.equal(card.name, "MqlSample");
   assert.equal(card.kind, "struct");
   assert.equal(card.full, [
@@ -199,6 +199,17 @@ test("a struct card takes its name from the definition and lists its fields", ()
     "Requests are sent in this structure.", "Note:", "Fill every field.",
     "[code example cut, 15 characters: mql5_read id=mql5/mqlsample focus=Note]",
   ].join("\n"));
+});
+
+test("a page that opens with an example struct it doesn't document gets no card", () => {
+  // As the book chapter "Working with real tick arrays in MqlTick structures":
+  // the struct is named in its prose and headings, not in its title or the keyword index.
+  const blocks = blocksOf(
+    ["paragraph", "The Pair structure keeps a key and its value."],
+    ["code", "struct Pair\n  {\n   int key;\n  };"],
+    ["heading", "Saving a Pair"], ["paragraph", "Each Pair is written to the file."],
+  );
+  assert.equal(pageCard({ id: "book/save_load", title: "Saving and loading structures", member: 0 }, blocks, resolveName, () => false), null);
 });
 
 test("pages that are not a function, class or struct get no card", () => {

@@ -8,7 +8,7 @@ const BRIEF_MAX = 380;
 const SIGNATURE_MAX = 240;
 // Class pages lay out their declaration, include line and method tables
 // under these headings; everything else on the page is prose for the card.
-const CLASS_LAYOUT = /^(declaration|title|class methods by groups?)$/i;
+export const CLASS_LAYOUT = /^(declaration|title|class methods by groups?)$/i;
 // "request", "array[]", "symbol=NULL", "comment=\"\"", "..."
 const PARAMETER_NAME = /^(\.\.\.|[\w[\]&*.]+(=\S*)?)$/;
 
@@ -382,11 +382,15 @@ export function constantCards(page, blocks, enumOfAnchor) {
 
 // The card of a whole page, or null for pages that are not a function,
 // method, class or struct (find shows their best passage instead). A struct
-// page is one whose first code block is the struct's definition.
-export function pageCard(page, blocks, resolveName) {
+// page is one whose first code block defines a struct the page documents
+// (isOwnName: its title or a keyword-index name of the page). Book chapters
+// open with example structs (Pair, MqlTick on "Working with real tick arrays
+// in MqlTick structures") and the language page with a template
+// (structure_name); a card named after those would stand in for their text.
+export function pageCard(page, blocks, resolveName, isOwnName) {
   const firstCode = blocks.find((block) => block.kind === "code");
   const struct = firstCode && /^struct\s+([A-Za-z_]\w*)/.exec(firstCode.text);
-  if (struct) return structCard(page, blocks, resolveName, struct[1], firstCode);
+  if (struct && isOwnName(struct[1])) return structCard(page, blocks, resolveName, struct[1], firstCode);
   if (!/^[A-Za-z_]\w*$/.test(page.title)) return null;
   const intro = blocks.slice(0, introEnd(blocks));
   if (declares(blocks, new RegExp(`^class\\s+${page.title}\\b`, "m"))) return classCard(page, blocks, resolveName);

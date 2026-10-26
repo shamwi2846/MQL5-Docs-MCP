@@ -105,6 +105,9 @@
   {"id":"real-calendar-tester","kind":"question","queries":["Are economic calendar functions available in the Strategy Tester"],"expect":[{"page":"book/7_3_calendar","facts":["Calendar functions cannot be used in the tester"]}],"held_out":false},
   {"id":"real-gv-kept","kind":"question","queries":["GlobalVariableSet how long are global variables kept"],"expect":[{"page":"mql5/globalvariableset","facts":["4 weeks since their last use"]}],"held_out":false},
   {"id":"real-pending-margin","kind":"question","queries":["Do pending orders reserve margin in MetaTrader 5?"],"expect":[{"page":"mql5/accountinformation","facts":["The amount reserved on an account to cover the margin of all pending orders"]}],"held_out":false},
-  {"id":"real-calendar-event-struct","kind":"name","queries":["MqlCalendarEvent"],"expect":[{"page":"mql5/mqlcalendar","facts":["struct MqlCalendarEvent"]}],"held_out":false}
+  {"id":"real-calendar-event-struct","kind":"name","queries":["MqlCalendarEvent"],"expect":[{"page":"mql5/mqlcalendar","facts":["struct MqlCalendarEvent"]}],"held_out":false},
+  {"id":"real-stoplimit","kind":"question","queries":["stop limit order triggered becomes limit order"],"expect":[{"page":"book/6_4_4_experts_order_type","facts":["Upon reaching the stop price specified in the Buy Stop Limit or Sell Stop Limit order, a corresponding limit order is placed"]}],"held_out":false},
+  {"id":"real-print-tester","kind":"question","queries":["Print in the strategy tester log"],"expect":[{"page":"mql5/print","facts":["Print() function does not work during optimization in the Strategy Tester"]}],"held_out":false},
+  {"id":"howto-copyticks-tester","kind":"question","queries":["CopyTicks ticks in the Strategy Tester"],"expect":[{"page":"mql5/testing","facts":["the CopyTicks function allows receiving ticks outside the cache (only when testing on real ticks)"]}],"held_out":false}
  ]
 }

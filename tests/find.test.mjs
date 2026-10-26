@@ -393,6 +393,98 @@ ${code("int  SampleOpen(\n   uint  flags      // flags\n   );")}
   }, { hhk });
 });
 
+const textPage = (title, ...parts) => `<html><head><title>${title}</title></head><body><div id="help"><p class="p_H1"><span>${title}</span></p>
+${parts.map((part) => (part.startsWith("<") ? part : `<p class="p_Text"><span>${part}</span></p>`)).join("\n")}</div></body></html>`;
+const codeBlock = (text) => `<div><table><tr><td><p class="p_CodeExample"><span>${text.replace(/\n/g, "<br>")}</span></p></td></tr></table></div>`;
+const heading = (text) => `<p class="p_BoldTitles"><span>${text}</span></p>`;
+const keyword = (name, local) => `<li><object type="text/sitemap"><param name="Name" value="${name}"><param name="Local" value="${local}"></object>`;
+
+test("find: a book chapter opening with an example struct answers its title with its text", () => {
+  // As "Working with real tick arrays in MqlTick structures", which showed one sentence under "struct MqlTick".
+  const tick = codeBlock("struct SampleTick\n  {\n   double bid;\n  };");
+  const reference = { sampletick: textPage("SampleTick", tick, "This structure stores the latest sample prices.") };
+  const book = {
+    "5_3_ticks": textPage("5.3 Working with sample tick arrays", "The platform keeps the history of real sample ticks.", tick,
+      "Requests for ticks are synchronized with the trade server before they return."),
+  };
+  withPages(reference, (pageDb) => {
+    const [, chapter, struct] = blocksOf(findText(pageDb, ["Working with sample tick arrays", "SampleTick"], context));
+    assert.match(chapter, /^= Working with sample tick arrays · 5\.3 Working with sample tick arrays · book\/5_3_ticks\n[^]*Requests for ticks are synchronized/);
+    assert.match(struct, /^= SampleTick · struct · mql5\/sampletick\nstruct SampleTick/, "a page titled with its struct keeps the card");
+  }, { book });
+});
+
+test("find: a question on a struct page shows the matching section; a function page keeps its card", () => {
+  // As "Modify Pending Order", which showed the whole MqlTradeRequest card.
+  const cases = Array.from({ length: 6 }, (_, i) => [heading(`Case ${i}`), `Sample case ${i} fills the request. ${"Plain words about the request. ".repeat(10)}`]).flat();
+  const request = textPage("Sample Request Structure", codeBlock("struct SampleRequest\n  {\n   ulong order;\n  };"),
+    "Requests are sent in this structure.", ...cases, heading("Modify Pending Order"), "Trade order to modify the prices of a pending order.");
+  withPages({ request, send: functionPage("SampleSend", 1) }, (pageDb) => {
+    const [, modify, send] = blocksOf(findText(pageDb, ["Modify Pending Order", "how does SampleSend work"], context));
+    assert.match(modify, /best match: Sample Request Structure · mql5\/request\nModify Pending Order:\nTrade order to modify the prices of a pending order\./);
+    assert.doesNotMatch(modify, /struct SampleRequest/);
+    assert.match(send, /best match: SampleSend · mql5\/send\nThe SampleSend function does sample work\./, "a function card still answers");
+  }, { hhk: `<ul>${keyword("SampleRequest", "request.htm")}</ul>` });
+});
+
+test("find: a class's method catalogue doesn't outrank the page that answers", () => {
+  // As "stop limit order triggered becomes limit order", which answered with CExpert's method list.
+  const row = (method, text) => `<tr><td><p><span>${method}</span></p></td><td><p><span>${text}</span></p></td></tr>`;
+  const expert = textPage("CSampleExpert", "CSampleExpert is a base class for sample strategies.", heading("Class Methods by Groups"),
+    `<table><thead><tr><th><p><span>Trade Event Processing Methods</span></p></th><th><p><span></span></p></th></tr></thead><tbody>
+${row("TradeEventOrderTriggered", "Event handler of the Pending Stop Limit Order Triggered event")}
+${row("CheckTrailingOrderLong", "Checks Trailing Stop conditions of Buy Limit/Stop order")}</tbody></table>`);
+  const book = {
+    "6_4_4_types": textPage("6.4.4 Sample order types", "Upon reaching the stop price of a stop limit order, a corresponding limit order is placed.",
+      "A limit order with such a price gets triggered almost immediately.",
+      ...Array.from({ length: 8 }, (_, i) => `Filler sentence ${i} about market orders, pending orders and their expiration.`)),
+  };
+  withPages({ expert }, (pageDb) => {
+    const [, answer] = blocksOf(findText(pageDb, ["stop limit order triggered becomes limit order"], context));
+    assert.match(answer, /best match: 6\.4\.4 Sample order types · book\/6_4_4_types\n/);
+  }, { book });
+});
+
+test("find: a function the question writes with its capital reaches its page", () => {
+  // As "Print in the strategy tester log": "print" alone is in every code example.
+  const notes = Object.fromEntries(Array.from({ length: 4 }, (_, i) => [
+    [`notes${i}`, textPage(`Sample Tester Notes ${i}`, "Programs write their messages to the tester log.", "The tester log keeps every pass.")],
+    [`example${i}`, textPage(`Sample Example ${i}`, "The example shows a value.", codeBlock(`Printout("value ${i}");`))],
+  ]).flat());
+  // Unrelated pages, so the question's words are as rare as in the real docs.
+  for (let i = 0; i < 20; i++) notes[`topic${i}`] = textPage(`Sample Topic ${i}`, `Topic ${i} describes charts, colors and objects.`);
+  const printout = textPage("Printout", "It enters a message in the journal.", "Printout does not work during optimization in the tester.");
+  const best = (pages) => {
+    let line;
+    withPages(pages, (pageDb) => { line = findText(pageDb, ["Printout in the tester log"], context).split("\n")[2]; });
+    return line;
+  };
+  assert.match(best({ ...notes, printout }), /best match: Printout · mql5\/printout$/);
+  // Two fuzzy-system pages are titled "Calculate": a title two pages share is no sign of which one is meant.
+  assert.match(best({ ...notes, printout, printout2: printout }), /best match: Sample Tester Notes/, "a title two pages share gets no boost");
+});
+
+test("find: a question naming an API in a context its page lacks is answered where both are covered", () => {
+  // As "CopyTicks in the Strategy Tester": the CopyTicks page never mentions the tester.
+  const ticks = textPage("SampleTicks", "The function receives ticks into an array.", codeBlock("int  SampleTicks(\n   string  symbol\n   );"),
+    heading("Parameters"), "<p><span>symbol</span></p>", "<p><span>[in] Symbol name.</span></p>",
+    heading("Return Value"), "The number of copied ticks.", heading("Note"), "Ticks are synchronized with the trade server.");
+  const pages = {
+    ticks,
+    // Ranks first for the tester words, but names the API only in code.
+    tester: textPage("Sample Strategy Tester", "The strategy tester runs sample programs on history.",
+      codeBlock("SampleTicks(_Symbol); // ticks in the strategy tester")),
+    testing: textPage("Testing Sample Programs", "Testing on history is fast.", heading("Using real ticks during a test"),
+      "Ticks are stored in the cache of the strategy tester. The SampleTicks function receives ticks outside the cache only when testing on real ticks."),
+  };
+  withPages(pages, (pageDb) => {
+    const [, tester, own] = blocksOf(findText(pageDb, ["SampleTicks ticks in the strategy tester", "SampleTicks ticks synchronized"], context));
+    assert.match(tester, /best match: Testing Sample Programs · mql5\/testing\nUsing real ticks during a test:\nTicks are stored in the cache/);
+    assert.match(tester, /\nOther pages: SampleTicks \(mql5\/ticks\)/, "the API page is listed next");
+    assert.match(own, /best match: SampleTicks · mql5\/ticks\n/, "a paragraph of the API page holds the whole context");
+  });
+});
+
 test("find: a brief never cuts a signature", () => {
   // A long name echoed in a long query leaves less room than the stored
   // signature needs (it is under the 240 characters a brief keeps).

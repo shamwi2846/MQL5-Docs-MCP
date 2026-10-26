@@ -1,7 +1,7 @@
 // mql5_find: names get their answer card, questions the best card or
 // passage, all in one reply within a fixed budget.
 import { EXPANSIONS } from "./config.mjs";
-import { sectionEnd } from "./cards.mjs";
+import { CLASS_LAYOUT, sectionEnd } from "./cards.mjs";
 import { mainPage, rankPages } from "./names.mjs";
 import { blocksOfPage, focusStart, PAGE_SIZE, paginate, quoteArgument } from "./search.mjs";
 
@@ -116,7 +116,7 @@ function answerName(db, query, resolved) {
   // search results are listed too.
   const named = new Set(pages.map((page) => page.page_id));
   const related = change === "spelling corrected to" && /\s/.test(query)
-    ? searchPages(db, questionTerms(db, query).terms).filter((id) => !named.has(id)).slice(0, 2) : [];
+    ? searchPages(db, questionTerms(db, query).terms, query).filter((id) => !named.has(id)).slice(0, 2) : [];
   const relatedLine = related.length ? `Other pages: ${related.map((id) => `${pageTitle(db, id).title} (${id})`).join(", ")}` : null;
   const also = [alsoNamed, relatedLine].filter(Boolean).join("\n") || null;
   const outcome = outcomeLine(query, name, change, card, winner.page_id, info.title);
@@ -166,19 +166,23 @@ const productName = (word, before) => PRODUCT_NAMES.has(word) || (/^\d$/.test(wo
 
 // A question's search words without stopwords and product names, and its
 // candidate pages: API names the question writes first (a class preceded by
-// its methods the question asks for), then phrase expansions, whose terms that
-// are names add their main page in the listed order ("indicator buffer values"
-// → CopyBuffer, SetIndexBuffer); other terms add search words. The question's
-// own words are always kept.
+// its methods the question asks for; `names` and `named` keep these apart),
+// then phrase expansions, whose terms that are names add their main page in
+// the listed order ("indicator buffer values" → CopyBuffer, SetIndexBuffer);
+// other terms add search words. The question's own words are always kept.
 function questionTerms(db, query) {
   const words = wordsOf(query);
   const kept = words.filter((word, i) => !STOPWORDS.has(word) && !productName(word, words[i - 1]));
   const terms = new Set(kept.length ? kept : words);
-  const pages = (query.match(/[A-Za-z_]\w*(?:::\w+)?/g) ?? []).filter((word) => API_NAME.test(word))
-    .flatMap((word) => {
-      const page = mainPage(db, word)?.page_id;
-      return page ? [...methodsAsked(db, word, words), page] : [];
-    });
+  const names = [];
+  const named = [];
+  for (const word of query.match(/[A-Za-z_]\w*(?:::\w+)?/g) ?? []) {
+    const page = API_NAME.test(word) && mainPage(db, word)?.page_id;
+    if (!page) continue;
+    names.push(word);
+    named.push(...methodsAsked(db, word, words), page);
+  }
+  const pages = [...named];
   const lower = query.toLowerCase();
   for (const expansion of EXPANSIONS) {
     if (!expansion.phrases.some((phrase) => lower.includes(phrase))) continue;
@@ -188,7 +192,7 @@ function questionTerms(db, query) {
       else for (const word of wordsOf(term)) terms.add(word);
     }
   }
-  return { terms: [...terms], pages };
+  return { terms: [...terms], pages, names, named };
 }
 
 // How rare a word is across all sections (inverse document frequency),
@@ -201,25 +205,45 @@ function rarity(db, term) {
   return Math.log((counts.total + 1) / (counts.terms.get(term) + 1));
 }
 
+// A page titled with a word the question writes with one capital ("Print in
+// the strategy tester log"), when no other non-member page has that title
+// (two fuzzy-system pages are titled "Calculate").
+function titledPages(db, query) {
+  const titled = db.prepare("select id from pages where title = ? and member = 0");
+  const capitalized = new Set((query.match(/[A-Za-z_]\w*/g) ?? []).filter((word) => /^[A-Z][a-z0-9]+$/.test(word)));
+  return new Set([...capitalized].flatMap((word) => {
+    const rows = titled.all(word);
+    return rows.length === 1 ? [rows[0].id] : [];
+  }));
+}
+
 // Full-text search over all books, merged per page by its best section, best
 // first. A section keeps a modest boost for the Reference and loses up to half
 // its score when it lacks the question's rarer words, so an overview that only
 // shares "calendar functions available" doesn't beat the book page that
-// answers "... in the tester".
+// answers "... in the tester". A class page's method catalogue counts half:
+// it shares a trading question's words without answering it (CExpert lists
+// "Pending Order Triggered"). A page titled with a capitalized word of the
+// question counts double: "print" alone is in every code example.
 const MISSING_WORDS = 0.5;
-function searchPages(db, terms) {
+const CATALOGUE = 0.5;
+const TITLE_WORD = 2;
+function searchPages(db, terms, query) {
   if (!terms.length) return [];
   const weights = new Map(terms.map((term) => [term, rarity(db, term)]));
   const total = [...weights.values()].reduce((sum, weight) => sum + weight, 0) || 1;
+  const titled = titledPages(db, query);
   const match = terms.map((term) => `"${term}"`).join(" OR ");
-  const rows = db.prepare(`select s.page_id, s.title || ' ' || s.heading || ' ' || s.body as text,
+  const rows = db.prepare(`select s.page_id, s.heading, s.title || ' ' || s.heading || ' ' || s.body as text,
     bm25(sections, 0, 10, 5, 1) as score, p.source
     from sections s join pages p on p.id = s.page_id where sections match ? order by score limit 200`).all(match);
   const best = new Map();
   for (const row of rows) {
     const words = new Set(wordsOf(row.text));
     const found = terms.reduce((sum, term) => sum + (words.has(term) ? weights.get(term) : 0), 0);
-    const score = row.score * (row.source === "mql5" ? 1.25 : 1) * MISSING_WORDS ** (1 - found / total);
+    let score = row.score * (row.source === "mql5" ? 1.25 : 1) * MISSING_WORDS ** (1 - found / total);
+    if (CLASS_LAYOUT.test(row.heading)) score *= CATALOGUE;
+    if (titled.has(row.page_id)) score *= TITLE_WORD;
     if (!best.has(row.page_id) || score < best.get(row.page_id)) best.set(row.page_id, score);
   }
   return [...best].sort((a, b) => a[1] - b[1]).map(([id]) => id);
@@ -253,16 +277,48 @@ function passageStart(db, page, blocks, terms) {
   return { start, focus: term && focusStart(db, page.id, blocks, term) === start ? term : blocks[start].heading || null };
 }
 
+// Whether one prose block of a page, counted with its heading, holds every
+// word. Code never counts: a code example that calls an API says nothing
+// about the context it is asked in.
+function proseHolds(db, pageId, words) {
+  return blocksOfPage(db, pageId).some((block) => {
+    if (block.kind === "code") return false;
+    const found = new Set([...wordsOf(block.text), ...wordsOf(block.heading ?? "")]);
+    return words.every((word) => found.has(word));
+  });
+}
+
+// A question that names an API in a context its page never covers ("CopyTicks
+// in the Strategy Tester": no paragraph of the CopyTicks page holds strategy
+// and tester) is answered by the best search result with a paragraph holding
+// the API and the whole context (Testing Trading Strategies: "the CopyTicks
+// function allows receiving ticks outside the cache (only when testing on
+// real ticks)"); the API's page is listed next. A word the API page happens
+// to share ("ticks") doesn't keep it first.
+function contextPage(db, apiWords, named, context, searched) {
+  if (!named.length || !context.length || proseHolds(db, named[0], context)) return null;
+  return searched.find((id) => !named.includes(id) && proseHolds(db, id, [...apiWords, ...context])) ?? null;
+}
+
 // Questions: candidates from the question's API names and expansions first,
-// then search; the top page shows its card or the passage that covers the
-// question best, the next two are listed.
+// then search; the top page shows its card when it is a function or method
+// (signature, parameters, notes), otherwise the passage that covers the
+// question best: a class card is a method catalogue and a struct card the
+// whole page ("Modify Pending Order" is one section of MqlTradeRequest's 6,000
+// characters). The next two pages are listed.
 function answerQuestion(db, query) {
-  const { terms, pages } = questionTerms(db, query);
+  const { terms, pages, names, named } = questionTerms(db, query);
   if (!terms.length) return null;
-  const [first, ...rest] = [...new Set([...pages, ...searchPages(db, terms)])].slice(0, 3)
+  const searched = searchPages(db, terms, query);
+  // The question's own words set its context and place the passage; words from expansions only find pages.
+  const asked = wordsOf(query);
+  const own = terms.filter((term) => asked.includes(term));
+  const apiWords = new Set(names.flatMap(wordsOf));
+  const lead = contextPage(db, [...apiWords], named, own.filter((term) => !apiWords.has(term)), searched);
+  const [first, ...rest] = [...new Set([...(lead ? [lead] : []), ...pages, ...searched])].slice(0, 3)
     .map((id) => ({ id, title: pageTitle(db, id).title }));
   if (!first) return null;
-  const card = db.prepare("select name, kind, full, brief from cards where page_id = ? and kind <> 'constant'").get(first.id);
+  const card = db.prepare("select name, kind, full, brief from cards where page_id = ? and kind in ('function', 'method')").get(first.id);
   const outcome = `~ ${echo(query)} · no exact name; best match: ${first.title} · ${first.id}`;
   const others = rest.length ? `Other pages: ${rest.map((page) => `${page.title} (${page.id})`).join(", ")}` : null;
   if (card) {
@@ -272,9 +328,7 @@ function answerQuestion(db, query) {
     };
   }
   const blocks = blocksOfPage(db, first.id);
-  // The question's own words place the passage; words from expansions only find pages.
-  const asked = wordsOf(query);
-  const { start, focus } = passageStart(db, first, blocks, terms.filter((term) => asked.includes(term)));
+  const { start, focus } = passageStart(db, first, blocks, own);
   return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, start, PASSAGE, focus), also: others, readId: first.id };
 }
 

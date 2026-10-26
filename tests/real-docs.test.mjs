@@ -101,6 +101,24 @@ test("real docs: a name with its own section on another item's page gets that se
   assert.match(open, /^= DatabaseOpen · function · /);
 });
 
+test("real docs: struct cards only for documented structs; questions show the asked section", { skip }, () => {
+  const structs = db.prepare("select page_id, name from cards where kind = 'struct' order by page_id").all().map((row) => `${row.page_id} ${row.name}`);
+  assert.equal(structs.length, 13, structs.join(", "));
+  for (const own of ["mql5/mqltraderequest MqlTradeRequest", "mql5/mqlcalendar MqlCalendarCountry", "mql5/mqltick MqlTick"]) assert.ok(structs.includes(own), own);
+  assert.equal(db.prepare("select count(*) as n from cards where page_id = 'mql5/classes'").get().n, 0, "no card named after the structure_name template");
+  const context = { tag: "realtst", downloaded: "today" };
+  // This index holds the Reference only, where plain "Modify Pending Order" ranks a CExpertSignal method first; with
+  // the books (as installed) it ranks Trade Request Structure first. Naming the struct reaches that page either way.
+  const [, modify, stopLimit, print, ticks] = findText(db, ["MqlTradeRequest Modify Pending Order", "stop limit order triggered becomes limit order",
+    "Print in the strategy tester log", "CopyTicks ticks in the Strategy Tester"], context).split("\n\n");
+  assert.match(modify, /best match: Trade Request Structure · mql5\/mqltraderequest\nModify Pending Order:\nTrade order to modify the prices of a pending order/);
+  assert.doesNotMatch(modify, /struct MqlTradeRequest/);
+  assert.doesNotMatch(stopLimit, /best match: CExpert/);
+  assert.match(print, /best match: Print · mql5\/print\n/);
+  assert.match(ticks, /best match: Testing Trading Strategies · mql5\/testing\n[^]*the CopyTicks function allows receiving ticks outside the cache \(only when testing on real ticks\)/);
+  assert.match(ticks, /\nOther pages: CopyTicks \(mql5\/copyticks\)/);
+});
+
 test("real docs: a comparison column defines no constants", { skip }, () => {
   const count = db.prepare("select count(*) as n from cards where kind = 'constant' and name like 'D3D11!_%' escape '!'").get().n;
   assert.equal(count, 0);

@@ -42,11 +42,11 @@ test("bench: scores every case of a working server", async () => {
     const json = join(dir, "runs.json");
     const result = bench(dir, "--json", json);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /: \d+\/105 complete, rank 1 \d+, top 3 \d+, \d+ calls in sequence/);
+    assert.match(result.stdout, /: \d+\/108 complete, rank 1 \d+, top 3 \d+, \d+ calls in sequence/);
     const { cases } = JSON.parse(readFileSync(json, "utf8"));
     const ranked = cases.filter((c) => c.rank >= 1 && c.rank <= 3).length;
     assert.ok(cases.some((c) => c.rank === 0), "the run has absent or ambiguous cases");
-    assert.match(result.stdout, new RegExp(`: \\d+/105 complete, rank 1 \\d+, top 3 ${ranked},`), "cases without a rank are not in the top 3");
+    assert.match(result.stdout, new RegExp(`: \\d+/108 complete, rank 1 \\d+, top 3 ${ranked},`), "cases without a rank are not in the top 3");
     assert.match(result.stdout, /3 fresh starts: initialize \d+-\d+ ms/);
     // The fixture pages are not the real docs, so most facts are missing; the
     // run still names OrderSend first and passes an absent name.
