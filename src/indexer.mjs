@@ -333,6 +333,7 @@ function buildCards(db) {
     where page_id = ?1 and anchor is null and name like 'ENUM!_%' escape '!'
       and name not in (select name from names where page_id = ?1 and anchor is not null)`);
   const hasName = db.prepare("select 1 from names where name = ? and page_id = ?");
+  const ownName = db.prepare("select 1 from names where name = ? and page_id = ? and kind in ('title', 'keyword')");
   const insertName = db.prepare("insert into names values (?, ?, ?, 'constant', 0, ?, ?)");
   let seq = db.prepare("select coalesce(max(seq), -1) + 1 as next from names").get().next;
 
@@ -358,7 +359,7 @@ function buildCards(db) {
     if (SUMMARY_PAGES.has(page.id)) continue;
     const blocks = blocksOf.all(page.id).map((block) => ({ ...block, anchors: block.anchors ? block.anchors.split(" ") : [] }));
     const owners = ownersOf.all(page.id).map((row) => row.name.split("::")[0]);
-    const card = pageCard(page, blocks, resolveFor(owners, page.id));
+    const card = pageCard(page, blocks, resolveFor(owners, page.id), (name) => Boolean(ownName.get(name, page.id)));
     if (card) insertCard.run(card.name, page.id, card.kind, null, null, null, null, card.full, card.brief);
 
     // One card per constant and page; a constant repeated on the same page keeps its first row.
