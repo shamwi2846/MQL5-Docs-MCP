@@ -478,7 +478,9 @@ test("find: a question naming an API in a context its page lacks is answered whe
     testerClass: textPage("Strategy Tester Ticks Class", "This class controls the strategy tester.", heading("Class Methods by Groups"),
       `<table><thead><tr><th><p><span>Method</span></p></th><th><p><span>Description</span></p></th></tr></thead><tbody>
 <tr><td><p><span>SampleTicks</span></p></td><td><p><span>Gets ticks in the strategy tester</span></p></td></tr></tbody></table>`),
-    testing: textPage("Testing Sample Programs", "Testing on history is fast.", heading("Using real ticks during a test"),
+    // Its first section scores higher for the question's words, but never names the API.
+    testing: textPage("Testing Sample Programs", heading("Strategy tester ticks"), "The strategy tester stores ticks; the strategy tester keeps ticks in its cache.",
+      "Testing on history is fast.", heading("Using real ticks during a test"),
       "Ticks are stored in the cache of the strategy tester. The SampleTicks function receives ticks outside the cache only when testing on real ticks, as SampleFeed does."),
     feed: textPage("SampleFeed", "SampleFeed delivers ticks in the strategy tester."),
   };

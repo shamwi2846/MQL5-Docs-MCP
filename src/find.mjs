@@ -255,35 +255,38 @@ function searchPages(db, terms, query) {
 // topic beats a contents line. Words match singular or plural ("Testing
 // Trading Strategies" holds "strategy"). Code never counts ("long" in a
 // declaration). The focus lets mql5_read start at the same place.
-// "news" is not the plural of "new".
+// "news" is not the plural of "new". A page shown for the paragraph that holds
+// the whole question (contextPage) starts there: `chosen`.
 const singular = (word) => (word === "news" ? word : word.replace(/ies$/, "y").replace(/(?<!s)s$/, ""));
 const singularWords = (text) => new Set(wordsOf(text).map(singular));
-function passageStart(db, page, blocks, terms) {
+function passageStart(db, page, blocks, terms, chosen = -1) {
   const title = singularWords(page.title);
   const asked = terms.filter((term) => !title.has(singular(term))).sort((a, b) => rarity(db, b) - rarity(db, a));
   const weight = (text) => {
     const words = singularWords(text);
     return asked.reduce((sum, term) => sum + (words.has(singular(term)) ? 1 + rarity(db, term) : 0), 0);
   };
-  let start = -1;
+  let start = chosen;
   let best = 0;
-  blocks.forEach((block, i) => {
-    if (block.kind === "code" || block.kind === "heading") return;
-    const score = weight(block.text) + weight(block.heading);
-    if (score > best) [best, start] = [score, i];
-  });
+  if (start < 0) {
+    blocks.forEach((block, i) => {
+      if (block.kind === "code" || block.kind === "heading") return;
+      const score = weight(block.text) + weight(block.heading);
+      if (score > best) [best, start] = [score, i];
+    });
+  }
   if (start < 0) return { start: 0, focus: null };
   const term = asked.find((word) => wordsOf(blocks[start].text).includes(word));
   return { start, focus: term && focusStart(db, page.id, blocks, term) === start ? term : blocks[start].heading || null };
 }
 
-// Whether one prose block of a page, counted with its heading, holds every
-// word. Code never counts: a code example that calls an API says nothing
-// about the context it is asked in. Neither does a class's method catalogue,
-// which names methods without explaining them; other table rows do count (a
-// constant's row is its description).
-function proseHolds(db, pageId, words) {
-  return blocksOfPage(db, pageId).some((block) => {
+// The first prose block of a page that, counted with its heading, holds every
+// word, or -1. Code never counts: a code example that calls an API says
+// nothing about the context it is asked in. Neither does a class's method
+// catalogue, which names methods without explaining them; other table rows do
+// count (a constant's row is its description).
+function proseBlock(db, pageId, words) {
+  return blocksOfPage(db, pageId).findIndex((block) => {
     if (block.kind === "code" || CLASS_LAYOUT.test(block.heading)) return false;
     const found = new Set([...wordsOf(block.text), ...wordsOf(block.heading ?? "")]);
     return words.every((word) => found.has(word));
@@ -298,11 +301,19 @@ function proseHolds(db, pageId, words) {
 // real ticks)"); the API's page is listed next. A word the API page happens
 // to share ("ticks") doesn't keep it first. Another page the question names
 // that covers the context comes first instead ("OnDeinit when I use
-// ExpertRemove in optimization" → ExpertRemove).
+// ExpertRemove in optimization" → ExpertRemove). Returns the page and the
+// block that qualified it, where its passage starts.
 function contextPage(db, apiWords, named, context, searched) {
-  if (!named.length || !context.length || proseHolds(db, named[0], context)) return null;
-  return named.find((id) => proseHolds(db, id, context))
-    ?? searched.find((id) => !named.includes(id) && proseHolds(db, id, [...apiWords, ...context])) ?? null;
+  if (!named.length || !context.length || proseBlock(db, named[0], context) >= 0) return null;
+  for (const id of named) {
+    const start = proseBlock(db, id, context);
+    if (start >= 0) return { id, start };
+  }
+  for (const id of searched) {
+    const start = named.includes(id) ? -1 : proseBlock(db, id, [...apiWords, ...context]);
+    if (start >= 0) return { id, start };
+  }
+  return null;
 }
 
 // Questions: candidates from the question's API names and expansions first,
@@ -320,7 +331,7 @@ function answerQuestion(db, query) {
   const own = terms.filter((term) => asked.includes(term));
   const apiWords = new Set(names.flatMap(wordsOf));
   const lead = contextPage(db, [...apiWords], named, own.filter((term) => !apiWords.has(term)), searched);
-  const [first, ...rest] = [...new Set([...(lead ? [lead] : []), ...pages, ...searched])].slice(0, 3)
+  const [first, ...rest] = [...new Set([...(lead ? [lead.id] : []), ...pages, ...searched])].slice(0, 3)
     .map((id) => ({ id, title: pageTitle(db, id).title }));
   if (!first) return null;
   const card = db.prepare("select name, kind, full, brief from cards where page_id = ? and kind in ('function', 'method')").get(first.id);
@@ -333,7 +344,7 @@ function answerQuestion(db, query) {
     };
   }
   const blocks = blocksOfPage(db, first.id);
-  const { start, focus } = passageStart(db, first, blocks, own);
+  const { start, focus } = passageStart(db, first, blocks, own, lead ? lead.start : -1);
   return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, start, PASSAGE, focus), also: others, readId: first.id };
 }
 
