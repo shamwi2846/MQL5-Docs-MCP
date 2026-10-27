@@ -6,7 +6,9 @@
 // registry.unavailable lists clients that act as not installed.
 // registry.olderClaude makes claude report a missing entry as Claude Code
 // 2.1.114 does. Like the real claude, its -e takes every value up to the
-// next option.
+// next option. registry.shadowed[client] lists entries in scopes the shown
+// one hides (claude shows local before project before user): removing the
+// shown entry reveals the next.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const [, , file, client, ...args] = process.argv;
@@ -48,6 +50,8 @@ if (verb === "get") {
   }
 } else if (verb === "remove") {
   delete registry[client][rest[0]];
+  const hidden = registry.shadowed?.[client]?.shift();
+  if (hidden) registry[client][rest[0]] = hidden;
   save();
 } else if (verb === "add") {
   const dash = rest.indexOf("--");

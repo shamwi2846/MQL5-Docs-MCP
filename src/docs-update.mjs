@@ -271,15 +271,19 @@ export function cleanUp(dir, keep) {
 const sameHashes = (a, b) => BOOKS.every((book) => a?.[book.source] === b[book.source]);
 
 // npm run docs:update. It runs only next to an index of this schema version;
-// otherwise setup installs the matching server and index together.
+// otherwise setup installs the matching server and index together. The format
+// is checked on current.json as read under the lock: a setup that switched to
+// another format just before must not get its index replaced.
+const NO_CURRENT = "No usable data/current.json: run `npm run setup`, which installs the server and builds its index.";
 export async function update({ dir = dataDir(), acceptLoss = false, baseline, fetchImpl, unpackOptions, log = console.log } = {}) {
-  const current = readCurrent(dir) ?? fail("No usable data/current.json: run `npm run setup`, which installs the server and builds its index.");
-  if (current.schema_version !== SCHEMA_VERSION) {
-    fail(`The installed index has format ${current.schema_version}; this update builds format ${SCHEMA_VERSION}: run \`npm run setup\`.`);
-  }
+  if (!readCurrent(dir)) fail(NO_CURRENT);
   const release = takeLock(dir);
   const work = join(dir, `work-${stampNow()}`);
   try {
+    const current = readCurrent(dir) ?? fail(NO_CURRENT);
+    if (current.schema_version !== SCHEMA_VERSION) {
+      fail(`The installed index has format ${current.schema_version}; this update builds format ${SCHEMA_VERSION}: run \`npm run setup\`.`);
+    }
     const hashes = await downloadBooks(work, fetchImpl);
     if (sameHashes(current.chm, hashes) && current.builder_version === VERSION) {
       // Up to date only when the live index also passes its checks; otherwise it is rebuilt.

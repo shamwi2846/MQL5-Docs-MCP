@@ -1,9 +1,11 @@
 // npm run setup: installs this version for Claude Code and Codex and builds
-// its index when needed. npm run setup -- --uninstall [--purge] removes it.
+// its index when needed (add -- --accept-loss to accept an index that lacks
+// more than 2% of the names and cards). npm run setup -- --uninstall [--purge]
+// removes it.
 // Everything that can fail is checked before anything changes; a failure
 // after that puts the previous client entries back (DESIGN.md section 9).
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, rmSync } from "node:fs";
 import { delimiter, dirname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -44,7 +46,22 @@ export const CLIENTS = {
 };
 
 // App folders sit next to the data folder: %LOCALAPPDATA%\mql5-docs-mcp\app.
+// Cleanup deletes only folders setup made, named <version>-<stamp> and
+// holding this package's copy (package.json and src/server.mjs), because a
+// data folder set by MQL5_DOCS_DATA can put the app folder among someone
+// else's files.
 export const appRoot = (dir) => join(dirname(dir), "app");
+const APP_FOLDER = /^\d+\.\d+\.\d+-\d{8}T\d{9}Z$/;
+const PACKAGE = "mql5-docs-mcp";
+function isAppCopy(path) {
+  try {
+    return JSON.parse(readFileSync(join(path, "package.json"), "utf8")).name === PACKAGE && existsSync(join(path, "src", "server.mjs"));
+  } catch {
+    return false;
+  }
+}
+const appFolders = (root) => (existsSync(root) ? readdirSync(root, { withFileTypes: true }) : [])
+  .filter((entry) => entry.isDirectory() && APP_FOLDER.test(entry.name)).map((entry) => join(root, entry.name)).filter(isAppCopy);
 
 // The client's mql5-docs entry as { scope, command, args, env }, or null.
 function getEntry(name, run) {
@@ -83,6 +100,15 @@ export function isV2(entry, root) {
   const [server] = entry.args;
   return entry.args.length === 1 && /[\\/]src[\\/]server\.mjs$/i.test(server)
     && real(server).toLowerCase().startsWith(real(root).toLowerCase() + sep);
+}
+
+// A data folder named "app" is its own app folder, and cleaning up app
+// folders would delete the docs data.
+function checkFolders(dir, root) {
+  const [data, apps] = [dir, root].map((path) => real(path).toLowerCase() + sep);
+  if (data.startsWith(apps) || apps.startsWith(data)) {
+    fail(`The data folder ${dir} and the app folder ${root} overlap; set MQL5_DOCS_DATA to a folder not named "app".`);
+  }
 }
 
 function removeEntry(name, run, entry) {
@@ -190,16 +216,18 @@ const stampNow = () => new Date().toISOString().replace(/[-:.]/g, "");
 function removeUnusedApps(root, keep, found) {
   const used = new Set([keep, ...found.map((client) => getEntry(client.name, client.run)).filter(Boolean)
     .map((entry) => dirname(dirname(entry.args[0] ?? "")))].map((path) => real(path).toLowerCase()));
-  for (const name of readdirSync(root)) {
-    const path = join(root, name);
+  for (const path of appFolders(root)) {
     if (!used.has(real(path).toLowerCase())) rmSync(path, { recursive: true, force: true, maxRetries: 2 });
   }
 }
 
 // `build` passes test inputs (downloads, unpacker, baseline) to the update code.
-export async function setup({ dir = dataDir(), clients = CLIENTS, log = console.log, build = {} } = {}) {
+export async function setup({ dir = dataDir(), clients = CLIENTS, log = console.log, build = {}, acceptLoss = false } = {}) {
   checkNode(log);
+  // The registration carries the data folder, and clients start the server from anywhere.
+  dir = resolve(dir);
   const root = appRoot(dir);
+  checkFolders(dir, root);
   // The docs lock is held from before the client entries are read until the
   // end, so another setup, uninstall or update can't change them meanwhile.
   mkdirSync(dir, { recursive: true });
@@ -217,7 +245,7 @@ export async function setup({ dir = dataDir(), clients = CLIENTS, log = console.
       rmSync(app, { recursive: true, force: true });
       throw error;
     }
-    await install(dir, app, found, { log, build });
+    await install(dir, app, found, { log, build, acceptLoss });
     if (!skipped) removeUnusedApps(root, app, found);
     log(`Installed ${NAME} ${VERSION} for ${found.map((client) => client.name).join(" and ")}. Restart Claude Code and Codex.`);
   } finally {
@@ -228,7 +256,7 @@ export async function setup({ dir = dataDir(), clients = CLIENTS, log = console.
 // Builds the index if needed with the new copy's own update code, tests the
 // copy, registers it with each client and switches to the new index; on a
 // failure, puts the previous entries back.
-async function install(dir, app, found, { log, build }) {
+async function install(dir, app, found, { log, build, acceptLoss }) {
   const update = await import(pathToFileURL(join(app, "src", "docs-update.mjs")).href);
   let built = null;
   try {
@@ -241,7 +269,7 @@ async function install(dir, app, found, { log, build }) {
       const downloaded = new Date().toISOString().slice(0, 10);
       const sources = update.unpackBooks(dir, work, build.unpackOptions);
       const meta = { builder_version: VERSION, downloaded, chm: JSON.stringify(chm) };
-      built = { ...await update.buildChecked(dir, sources, meta, { baseline: build.baseline, log }), chm, downloaded };
+      built = { ...await update.buildChecked(dir, sources, meta, { acceptLoss, baseline: build.baseline, log }), chm, downloaded };
     }
     await selfTest(app, join(dir, built?.index ?? readCurrent(dir).index), dir);
     // The data folder is part of the registration, so the server finds this
@@ -280,23 +308,43 @@ async function install(dir, app, found, { log, build }) {
 // (kept when a client couldn't be checked, since it may still use one);
 // purge also deletes the docs data. Holds the docs lock like setup.
 export async function uninstall({ dir = dataDir(), clients = CLIENTS, purge = false, log = console.log } = {}) {
+  dir = resolve(dir);
   const root = appRoot(dir);
+  checkFolders(dir, root);
   mkdirSync(dir, { recursive: true });
   const release = takeLock(dir);
   try {
-    let skipped = false;
+    let keep = false;
     for (const [name, run] of Object.entries(clients)) {
       if (run(["--version"]).status !== 0) {
         log(`${name}: not found, so its entries could not be checked.`);
-        skipped = true;
+        keep = true;
         continue;
       }
-      const entry = getEntry(name, run);
-      if (entry && isV2(entry, root)) removeEntry(name, run, entry);
-      else if (entry) log(`${name}: its ${NAME} entry does not run a v2 installation; left alone.`);
+      // claude shows one entry, but its local, project and user scopes can
+      // each hold one: removing the one shown can reveal another app folder
+      // user, and an entry that isn't v2 can hide one, so the folders stay.
+      let entry = getEntry(name, run);
+      for (let removed = 0; entry && isV2(entry, root); removed++) {
+        if (removed === 3) fail(`${name} still has a v2 ${NAME} entry after removing three; remove it by hand (${name} mcp remove ${NAME}).`);
+        removeEntry(name, run, entry);
+        entry = getEntry(name, run);
+      }
+      if (entry) {
+        log(`${name}: its ${NAME} entry does not run a v2 installation; left alone.`);
+        keep = true;
+      }
     }
-    if (skipped) log(`App folders kept in ${root}; run the uninstall again once every client is available.`);
-    else rmSync(root, { recursive: true, force: true });
+    if (keep) log(`App folders kept in ${root}: an entry that could not be checked may still use one. Run the uninstall again once it is gone.`);
+    else {
+      for (const path of appFolders(root)) rmSync(path, { recursive: true, force: true, maxRetries: 2 });
+      // The app folder itself goes only when nothing else is in it.
+      try {
+        rmdirSync(root);
+      } catch {
+        // Missing, or holds files setup didn't make.
+      }
+    }
     if (purge) rmSync(dir, { recursive: true, force: true });
   } finally {
     release();
@@ -308,7 +356,7 @@ if (isEntry(import.meta)) {
   const args = process.argv.slice(2);
   try {
     if (args.includes("--uninstall")) await uninstall({ purge: args.includes("--purge") });
-    else await setup();
+    else await setup({ acceptLoss: args.includes("--accept-loss") });
   } catch (error) {
     if (!["SetupError", "UpdateError"].includes(error.constructor.name)) throw error;
     console.error(error.message);

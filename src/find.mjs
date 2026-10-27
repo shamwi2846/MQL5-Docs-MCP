@@ -334,7 +334,10 @@ function answerQuestion(db, query) {
   const asked = wordsOf(query);
   const own = terms.filter((term) => asked.includes(term));
   const apiWords = new Set(names.flatMap(wordsOf));
-  const lead = contextPage(db, [...apiWords], named, own.filter((term) => !apiWords.has(term)), searched);
+  // The words a name is made of say nothing beyond the name: "send a trade with OrderSend" asks about OrderSend.
+  const nameParts = new Set(names.flatMap((name) => camelWords(name).flatMap(wordsOf)));
+  const context = own.filter((term) => !apiWords.has(term) && !nameParts.has(term));
+  const lead = contextPage(db, [...apiWords], named, context, searched);
   const [first, ...rest] = [...new Set([...(lead ? [lead.id] : []), ...pages, ...searched])].slice(0, 3)
     .map((id) => ({ id, title: pageTitle(db, id).title }));
   if (!first) return null;

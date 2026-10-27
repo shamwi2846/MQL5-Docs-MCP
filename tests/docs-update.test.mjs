@@ -75,6 +75,39 @@ test("docs:update refuses an index of another format before downloading", async 
   });
 });
 
+test("docs:update validates the current schema after acquiring its lock", async () => {
+  await withData(async (dir) => {
+    const live = install(dir);
+    // A setup of a newer format finishes and releases the lock just as this update takes it.
+    const upgraded = JSON.stringify({ ...live, index: "index-newer.sqlite", schema_version: SCHEMA_VERSION + 1 });
+    const writeFile = fs.writeFileSync;
+    fs.writeFileSync = (file, ...rest) => {
+      if (String(file).endsWith("update.lock")) {
+        writeFile(join(dir, "index-newer.sqlite"), "newer format");
+        writeFile(join(dir, "current.json"), upgraded);
+        fs.writeFileSync = writeFile;
+        syncBuiltinESMExports();
+      }
+      return writeFile(file, ...rest);
+    };
+    syncBuiltinESMExports();
+    let requests = 0;
+    try {
+      await assert.rejects(update({ dir, ...options({ fetchImpl: async () => {
+        requests += 1;
+        throw new Error("no download expected");
+      } }) }), /has format 2; this update builds format 1: run `npm run setup`/);
+    } finally {
+      fs.writeFileSync = writeFile;
+      syncBuiltinESMExports();
+    }
+    assert.equal(requests, 0);
+    assert.equal(readFileSync(join(dir, "current.json"), "utf8"), upgraded, "the upgraded pointer stays");
+    assert.equal(readFileSync(join(dir, "index-newer.sqlite"), "utf8"), "newer format", "and its index");
+    assert.equal(existsSync(join(dir, "update.lock")), false, "the lock is released");
+  });
+});
+
 test("docs:update stops at another update's lock and leaves it", async () => {
   await withData(async (dir) => {
     install(dir);
@@ -305,6 +338,27 @@ test("downloads: HTTPS on www.mql5.com only, few redirects, complete and within 
     await assert.rejects(download("https://www.mql5.com/a.chm", file, { fetchImpl: huge }), /larger than 50 MB/);
     const ok = async () => new Response(Buffer.from("chm"), { headers: { "content-length": "3" } });
     assert.equal(await download("https://www.mql5.com/a.chm", file, { fetchImpl: ok }), createHash("sha256").update("chm").digest("hex"));
+  });
+});
+
+test("downloads: more than 50 MB without a Content-Length stops at the limit", async () => {
+  await withData(async (dir) => {
+    const work = join(dir, "work");
+    mkdirSync(work);
+    const MIB = 1024 * 1024;
+    let sent = 0;
+    // Fifty 1 MiB chunks, then one byte more, made as they are read.
+    const endless = async () => new Response(new ReadableStream({
+      pull(controller) {
+        const size = sent < 50 * MIB ? MIB : 1;
+        sent += size;
+        controller.enqueue(new Uint8Array(size));
+        if (sent > 50 * MIB) controller.close();
+      },
+    }));
+    await assert.rejects(download("https://www.mql5.com/a.chm", join(work, "big.chm"), { fetchImpl: endless }), /larger than 50 MB/);
+    rmSync(work, { recursive: true });
+    assert.equal(existsSync(work), false, "the file is closed when the failure is reported");
   });
 });
 
