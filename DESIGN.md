@@ -200,7 +200,7 @@ Why a pointer file and versioned index names: measured on this PC, Windows refus
 
 Setup (section 9) runs the same steps 2 to 8 under its own hold on the lock, and delays the switch until both clients are registered.
 
-**Index format guard**: a standalone `docs:update` runs only when `current.json` can be read and records the same schema version as the update code's own (the index file itself may be missing or damaged; that is what a repair is for). If `current.json` is missing, unreadable or records a different schema, older or newer, the update stops before downloading and says to run `npm run setup`, which installs the matching server and builds its index together. So running the update from an old checkout or a newer one can never leave the installed server with an index it can't read.
+**Index format guard**: a standalone `docs:update` runs only when `current.json` can be read and records the same schema version as the update code's own (the index file itself may be missing or damaged; that is what a repair is for). If `current.json` is missing, unreadable or records a different schema, older or newer, the update stops before downloading and says to run `npm run setup`, which installs the matching server and builds its index together. The schema is checked on `current.json` as read after taking the lock, so a setup that switched formats a moment before never gets its index replaced. So running the update from an old checkout or a newer one can never leave the installed server with an index it can't read.
 
 `npm run docs:status` prints the version and counts for humans. `npm run find -- <query>` prints exactly what `mql5_find` returns (same code), for quick checks and tests.
 
@@ -229,11 +229,11 @@ From a fresh checkout, run `npm ci` once (there are no development-only dependen
    - `codex mcp add mql5-docs -- <node.exe> <app>\src\server.mjs`
    An existing v2 entry is removed first, and its full settings (scope, command, arguments, environment) are remembered until setup ends. Other servers are never touched. The tests cover an install path containing spaces.
 7. **Switch** `current.json` to the new index, if one was built (section 7, step 7).
-8. **Finish**: clean up as in section 7, step 8, delete older app folders that are not in use, and release the lock. Setup says to restart Claude Code and Codex; running sessions keep their copy until then.
+8. **Finish**: clean up as in section 7, step 8, delete older app folders that are not in use, and release the lock. Only folders setup made (named `<version>-<stamp>` and holding this package's `package.json` and `src/server.mjs`) are ever deleted, because a data folder set by `MQL5_DOCS_DATA` can put the app folder among other files; a data folder named `app`, which would be its own app folder, is refused before anything changes. The data folder is registered as an absolute path, and `--accept-loss` passes through to the index build as in `docs:update`. Setup says to restart Claude Code and Codex; running sessions keep their copy until then.
 
 **If any step from 4 to 7 fails**, setup puts back the remembered entries in both clients and leaves `current.json` as it was, then deletes the new index and the new app folder unless some client entry still refers to them, and releases the lock. Two client registrations and a pointer file can't be changed in one atomic step, so this is a best effort, not a guarantee: if putting an entry back also fails (or setup is killed midway), setup keeps every app folder and index that any entry or `current.json` still refers to, and prints the actual state of each client with the commands that fix it. Running `npm run setup` again repairs that state. The tests cover a failure at the second registration, at the switch, and while putting entries back.
 
-`npm run setup -- --uninstall` removes only entries that run a v2 installation, then the app folders; `--purge` also deletes the data.
+`npm run setup -- --uninstall` removes only entries that run a v2 installation (for Claude Code, again after each removal, since a local entry can hide a user one), then the app folders setup made, and the app folder itself only when nothing else is in it. When a client can't be checked or shows an entry that isn't v2 (which may hide one that is), the app folders stay; `--purge` also deletes the data.
 
 ## 10. Safety rules
 

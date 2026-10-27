@@ -307,3 +307,39 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Never happens in the installed docs: no page titled X<T> has a later bodiless declaration, and every template-prefixed declaration is in a page's opening part, which the card always shows whole (checked on the real Reference index).
+
+## G35 · fixed · 2026-10-27 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/docs-update.mjs:276-280
+- Problem: F2: The format guard checks metadata before acquiring the lock
+- Trigger: During a format-changing upgrade, an older updater reads current.json, setup completes its switch and releases the lock, and the updater then acquires it.
+- Fix: Reread current.json and validate its schema after acquiring the lock, inside the existing try/finally, and use that snapshot throughout the update.
+- Log: 20261027010944-4ef429
+- Why skipped: pair: confirmed by B
+
+## G36 · fixed · 2026-10-27 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/setup.mjs:244
+- Problem: F3: Setup recommends a loss-acceptance retry that it ignores
+- Trigger: A same-schema setup rebuild passes the baseline but loses more than 2% of names or cards, and the owner follows the error's instruction to retry with --accept-loss.
+- Fix: Parse --accept-loss for setup and pass its value through to buildChecked.
+- Log: 20261027010944-4ef429
+- Why skipped: pair: confirmed by B
+
+## G37 · fixed · 2026-10-27 · MEDIUM
+- Task: Implement MQL5 Docs MCP v2
+- Where: src/docs-update.mjs:88-98
+- Problem: F4: The streamed download size boundary lacks a regression test
+- Trigger: A response omits Content-Length and streams more than 50 MB.
+- Fix: Add a headerless response that streams past 50 MB. Assert the specific size-limit error, completed cleanup, lock release, and preservation of the live index.
+- Log: 20261027010944-4ef429
+- Why skipped: pair: confirmed by B
+
+## G38 · open · 2026-10-27 · LOW
+- Task: Implement MQL5 Docs MCP v2
+- Where: tests/setup.test.mjs
+- Problem: F1: Add a setup regression test for the --accept-loss fix
+- Trigger: Setup rebuilds an index that loses more than 2% of names or cards, with the owner explicitly accepting that loss.
+- Fix: Add a setup test with a healthy older index containing extra names: verify setup refuses the loss by default and succeeds with acceptLoss: true.
+- Log: 20261027014110-067a0d
+- Why skipped: labelled GAP by the reviewer; harm: A regression could block an accepted upgrade without any test failing.

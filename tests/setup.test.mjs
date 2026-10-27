@@ -3,14 +3,17 @@
 // docs and other installations; a foreign entry stops setup before any
 // change; a failed second registration, and a failed switch, put both old
 // entries back exactly; a rollback that can't finish keeps what is still
-// referenced, and setup again repairs it. Stand-in claude and codex programs
+// referenced, and setup again repairs it. From the full-code review: only app
+// folders setup named are deleted (a data folder named app is refused), the
+// data folder is registered absolute, and uninstall removes a user entry a
+// local one hid. Stand-in claude and codex programs
 // keep their entries in a JSON file; downloads and hh.exe are stand-ins as
 // in the update tests. The real clients are never touched.
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -45,11 +48,18 @@ function sandbox(root) {
   };
 }
 
-// An existing v2 app folder with a server.mjs (its content doesn't matter here).
+// Older app folders, named as setup names them (<version>-<stamp>).
+const CLAUDE_APP = "0.0.9-20261001T000000001Z";
+const CODEX_APP = "0.0.9-20261001T000000002Z";
+const OTHER_APP = "0.0.9-20261001T000000003Z";
+
+// An existing v2 app folder: this package's package.json and a server.mjs
+// (their content doesn't matter here).
 function oldApp(dir, name) {
   const server = join(appRoot(dir), name, "src", "server.mjs");
   mkdirSync(join(server, ".."), { recursive: true });
   writeFileSync(server, "// old version");
+  writeFileSync(join(appRoot(dir), name, "package.json"), JSON.stringify({ name: "mql5-docs-mcp", version: "0.0.9" }));
   return server;
 }
 
@@ -58,8 +68,8 @@ function oldApp(dir, name) {
 function seedOldInstall(box) {
   mkdirSync(box.dir, { recursive: true });
   const live = installIndex(box.dir, "index-a.sqlite", [{ source: "mql5", dir: BOOK }], { builder_version: "0.0.1" });
-  const claude = { scope: "local", command: "C:\\Old Node\\node.exe", args: [oldApp(box.dir, "0.0.9-claude")], env: { DEBUG: "1" } };
-  const codex = { scope: null, command: "C:\\Other Node\\node.exe", args: [oldApp(box.dir, "0.0.9-codex")], env: { MODE: "a b" } };
+  const claude = { scope: "local", command: "C:\\Old Node\\node.exe", args: [oldApp(box.dir, CLAUDE_APP)], env: { DEBUG: "1" } };
+  const codex = { scope: null, command: "C:\\Other Node\\node.exe", args: [oldApp(box.dir, CODEX_APP)], env: { MODE: "a b" } };
   return { live, claude, codex, current: readFileSync(join(box.dir, "current.json")), index: readFileSync(join(box.dir, live.index)) };
 }
 
@@ -112,6 +122,66 @@ test("setup installs for both clients; uninstall keeps the docs and other instal
   });
 });
 
+test("setup and uninstall delete only app folders setup made, and refuse a data folder named app", async () => {
+  await withData(async (root) => {
+    // A data folder set by MQL5_DOCS_DATA can put the app folder among other files.
+    const box = sandbox(root);
+    mkdirSync(appRoot(box.dir), { recursive: true });
+    writeFileSync(join(appRoot(box.dir), "notes.txt"), "keep me");
+    mkdirSync(join(appRoot(box.dir), "project"));
+    // Named like an app folder, but not a copy of this package.
+    const lookalike = join(appRoot(box.dir), "1.2.3-20261026T120000000Z");
+    mkdirSync(join(lookalike, "src"), { recursive: true });
+    writeFileSync(join(lookalike, "src", "server.mjs"), "// someone else's");
+    await box.run();
+    await uninstall({ dir: box.dir, clients: box.clients, log: () => {} });
+    assert.deepEqual(readdirSync(appRoot(box.dir)).sort(), ["1.2.3-20261026T120000000Z", "notes.txt", "project"], "only setup's own app folder went");
+
+    const appData = join(root, "app");
+    const before = readdirSync(appData).sort();
+    const settings = JSON.stringify(box.registry());
+    await assert.rejects(setup({ dir: appData, clients: box.clients, log: () => {} }), /overlap/);
+    await assert.rejects(uninstall({ dir: appData, clients: box.clients, log: () => {} }), /overlap/);
+    assert.deepEqual(readdirSync(appData).sort(), before, "nothing in it changed");
+    assert.equal(JSON.stringify(box.registry()), settings, "no client setting changed");
+  });
+});
+
+test("setup registers the data folder as an absolute path", async () => {
+  await withData(async (root) => {
+    const box = sandbox(root);
+    await box.run({ dir: relative(process.cwd(), box.dir) });
+    assert.deepEqual(box.entry("claude").env, { MQL5_DOCS_DATA: box.dir }, "clients start the server from any folder");
+    assert.deepEqual(box.entry("codex").env, { MQL5_DOCS_DATA: box.dir });
+  });
+});
+
+test("uninstall removes every v2 entry claude shows in turn before deleting the app folders", async () => {
+  await withData(async (root) => {
+    const box = sandbox(root);
+    const old = seedOldInstall(box);
+    const user = { scope: "user", command: process.execPath, args: [oldApp(box.dir, OTHER_APP)], env: {} };
+    box.seed({ claude: { "mql5-docs": old.claude }, codex: { "mql5-docs": old.codex }, shadowed: { claude: [user] } });
+    await uninstall({ dir: box.dir, clients: box.clients, log: () => {} });
+    assert.equal(box.entry("claude"), undefined, "the user-scope entry hidden behind the local one is removed too");
+    assert.equal(box.entry("codex"), undefined);
+    assert.deepEqual(box.apps(), []);
+  });
+});
+
+test("uninstall keeps the app folders when an entry that isn't v2 may hide one that is", async () => {
+  await withData(async (root) => {
+    const box = sandbox(root);
+    const old = seedOldInstall(box);
+    const foreign = { scope: "project", command: process.execPath, args: ["C:\\Other\\server.mjs"], env: {} };
+    const user = { scope: "user", command: process.execPath, args: [oldApp(box.dir, OTHER_APP)], env: {} };
+    box.seed({ claude: { "mql5-docs": old.claude }, codex: { "mql5-docs": old.codex }, shadowed: { claude: [foreign, user] } });
+    await uninstall({ dir: box.dir, clients: box.clients, log: () => {} });
+    assert.deepEqual(box.entry("claude"), foreign, "the entry that isn't v2 is left alone");
+    assert.ok(existsSync(user.args[0]), "the app the hidden user entry runs is kept");
+  });
+});
+
 test("setup installs when an older Claude Code words a missing entry differently", async () => {
   await withData(async (root) => {
     const box = sandbox(root);
@@ -130,7 +200,7 @@ test("setup stops before any change when an entry runs something that isn't v2",
     mkdirSync(box.dir, { recursive: true });
     // Next to the app folder, with a name starting the same way: not a v2 install.
     const neighbour = join(root, "app-neighbour", "0.1.0", "src", "server.mjs");
-    const v2 = { scope: "user", command: process.execPath, args: [oldApp(box.dir, "0.0.9-x")], env: {} };
+    const v2 = { scope: "user", command: process.execPath, args: [oldApp(box.dir, OTHER_APP)], env: {} };
     const foreign = { scope: null, command: process.execPath, args: [neighbour], env: {} };
     box.seed({ claude: { "mql5-docs": v2 }, codex: { "mql5-docs": foreign } });
     const settings = () => JSON.stringify([box.registry().claude, box.registry().codex]);
@@ -141,7 +211,7 @@ test("setup stops before any change when an entry runs something that isn't v2",
       throw new Error("no download expected");
     } } }), /codex already has an mql5-docs entry that runs .*app-neighbour/);
     assert.equal(settings(), before, "no client setting changed");
-    assert.deepEqual(box.apps(), ["0.0.9-x"], "nothing copied");
+    assert.deepEqual(box.apps(), [OTHER_APP], "nothing copied");
     assert.equal(downloads, 0);
     assert.deepEqual(files(box.dir), []);
   });
@@ -158,7 +228,7 @@ test("a failed second registration puts both old entries back exactly", async ()
     assert.ok(readFileSync(join(box.dir, "current.json")).equals(old.current));
     assert.ok(readFileSync(join(box.dir, old.live.index)).equals(old.index));
     assert.deepEqual(files(box.dir), ["current.json", old.live.index], "the unused new index, work folder and lock are gone");
-    assert.deepEqual(box.apps(), ["0.0.9-claude", "0.0.9-codex"], "the new app folder is gone; the old ones stay");
+    assert.deepEqual(box.apps(), [CLAUDE_APP, CODEX_APP], "the new app folder is gone; the old ones stay");
   });
 });
 
@@ -187,7 +257,7 @@ test("a failed switch puts both old entries back and leaves the open index as it
     assert.ok(readFileSync(join(box.dir, "current.json")).equals(old.current));
     assert.ok(readFileSync(join(box.dir, old.live.index)).equals(old.index));
     assert.deepEqual(files(box.dir), ["current.json", old.live.index], "no new index, temporary pointer, work folder or lock");
-    assert.deepEqual(box.apps(), ["0.0.9-claude", "0.0.9-codex"]);
+    assert.deepEqual(box.apps(), [CLAUDE_APP, CODEX_APP]);
   });
 });
 
@@ -227,7 +297,7 @@ test("setup and uninstall wait for no one: another holder of the docs lock stops
     await assert.rejects(box.run(), /Another docs update may be running \(process 4242/);
     await assert.rejects(uninstall({ dir: box.dir, clients: box.clients, log: () => {} }), /Another docs update may be running/);
     assert.equal(box.registry().calls, undefined, "no client was even asked for its entries");
-    assert.deepEqual(box.apps(), ["0.0.9-claude", "0.0.9-codex"]);
+    assert.deepEqual(box.apps(), [CLAUDE_APP, CODEX_APP]);
     assert.deepEqual(files(box.dir), ["current.json", old.live.index, "update.lock"]);
   });
 });
