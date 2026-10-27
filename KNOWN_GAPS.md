@@ -343,3 +343,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: Add a setup test with a healthy older index containing extra names: verify setup refuses the loss by default and succeeds with acceptLoss: true.
 - Log: 20261027014110-067a0d
 - Why skipped: labelled GAP by the reviewer; harm: A regression could block an accepted upgrade without any test failing.
+
+## G39 · open · 2026-10-27 · LOW
+- Task: -
+- Where: src/setup.mjs:340
+- Problem: A symlink or junction at the app folder is followed by cleanup, which may delete app folders in the link's target (CodeRabbit, PR #6).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Cleanup deletes only folders named <version>-<stamp> that hold this package's package.json and src/server.mjs, so through a link it can only remove copies of this same tool, which setup recreates; a linked app folder is a user's deliberate relocation (another drive), which rejecting would break.
