@@ -352,3 +352,12 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Fix: -
 - Log: recorded by hand
 - Why skipped: Cleanup deletes only folders named <version>-<stamp> that hold this package's package.json and src/server.mjs, so through a link it can only remove copies of this same tool, which setup recreates; a linked app folder is a user's deliberate relocation (another drive), which rejecting would break.
+
+## G40 · open · 2026-10-28 · LOW
+- Task: -
+- Where: src/server.mjs:43
+- Problem: mql5_find refuses a call that names its argument query instead of queries (MCP error -32602, Invalid input at queries). Codex CLI 0.165.0 at low effort sent {"query": "OrderSend"} in 3 of 3 runs when the prompt itself said 'with the query OrderSend'.
+- Trigger: A prompt that calls the argument 'the query', together with 'call no other tool', so the agent can't retry.
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Not normal use: plain 'look up OrderSend' prompts at the same effort sent {"queries": ["OrderSend"]} in 3 of 3 runs, and the run that retried corrected itself from the error. The cost is one extra call; accepting a second argument name would add input every client sees, for a mistake the prompt caused.
