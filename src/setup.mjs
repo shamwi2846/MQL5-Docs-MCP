@@ -11,8 +11,8 @@ import { pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { dataDir, isEntry, readCurrent, SCHEMA_VERSION, VERSION } from "./data.mjs";
-import { takeLock } from "./docs-update.mjs";
+import { dataDir, isEntry, readCurrent, VERSION } from "./data.mjs";
+import { stampNow, takeLock } from "./docs-update.mjs";
 
 const NAME = "mql5-docs";
 const REPO = join(import.meta.dirname, "..");
@@ -210,8 +210,6 @@ function restore(found) {
   return broken;
 }
 
-const stampNow = () => new Date().toISOString().replace(/[-:.]/g, "");
-
 // App folders no client entry refers to, except the new one, are deleted.
 function removeUnusedApps(root, keep, found) {
   const used = new Set([keep, ...found.map((client) => getEntry(client.name, client.run)).filter(Boolean)
@@ -266,10 +264,8 @@ async function install(dir, app, found, { log, build, acceptLoss }) {
     if (!live || readCurrent(dir).builder_version !== VERSION) {
       const work = join(dir, `work-${stampNow()}`);
       const chm = await update.downloadBooks(work, build.fetchImpl);
-      const downloaded = new Date().toISOString().slice(0, 10);
-      const sources = update.unpackBooks(dir, work, build.unpackOptions);
-      const meta = { builder_version: VERSION, downloaded, chm: JSON.stringify(chm) };
-      built = { ...await update.buildChecked(dir, sources, meta, { acceptLoss, baseline: build.baseline, log }), chm, downloaded };
+      const options = { acceptLoss, log, baseline: build.baseline, unpackOptions: build.unpackOptions };
+      built = await update.buildDownloaded(dir, work, chm, options);
     }
     await selfTest(app, join(dir, built?.index ?? readCurrent(dir).index), dir);
     // The data folder is part of the registration, so the server finds this
@@ -283,10 +279,7 @@ async function install(dir, app, found, { log, build, acceptLoss }) {
       addEntry(client.name, client.run, entry);
       client.added = true;
     }
-    if (built) {
-      await update.switchCurrent(dir, { index: built.index, sha256: built.sha256, schema_version: SCHEMA_VERSION, chm: built.chm,
-        downloaded: built.downloaded, builder_version: VERSION });
-    }
+    if (built) await update.switchCurrent(dir, built);
   } catch (error) {
     const broken = restore(found);
     // current.json is unchanged. cleanUp removes an unnamed index only when
@@ -326,7 +319,9 @@ export async function uninstall({ dir = dataDir(), clients = CLIENTS, purge = fa
       // user, and an entry that isn't v2 can hide one, so the folders stay.
       let entry = getEntry(name, run);
       for (let removed = 0; entry && isV2(entry, root); removed++) {
-        if (removed === 3) fail(`${name} still has a v2 ${NAME} entry after removing three; remove it by hand (${name} mcp remove ${NAME}).`);
+        if (removed === 3) {
+          fail(`${name} still has a v2 ${NAME} entry after removing three; remove it by hand (${name} mcp remove ${NAME}).`);
+        }
         removeEntry(name, run, entry);
         entry = getEntry(name, run);
       }
@@ -335,8 +330,10 @@ export async function uninstall({ dir = dataDir(), clients = CLIENTS, purge = fa
         keep = true;
       }
     }
-    if (keep) log(`App folders kept in ${root}: an entry that could not be checked may still use one. Run the uninstall again once it is gone.`);
-    else {
+    if (keep) {
+      log(`App folders kept in ${root}: an entry that could not be checked may still use one. `
+        + "Run the uninstall again once it is gone.");
+    } else {
       for (const path of appFolders(root)) rmSync(path, { recursive: true, force: true, maxRetries: 2 });
       // The app folder itself goes only when nothing else is in it.
       try {

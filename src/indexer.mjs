@@ -5,9 +5,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import * as cheerio from "cheerio";
-import { constantCards, pageCard, SECTION_HEADINGS } from "./cards.mjs";
+import { constantCards, introEnd, pageCard } from "./cards.mjs";
 import { SUMMARY_PAGES } from "./config.mjs";
 import { SCHEMA_VERSION } from "./data.mjs";
+import { blocksOfPage } from "./search.mjs";
 
 const SCHEMA = `
 create table meta (key text primary key, value text not null);
@@ -186,15 +187,14 @@ export function parsePage(html) {
 }
 
 // Owners printed in the page's declarations ("bool matrix::CopyRates(",
-// "vector vector::NormalizeDouble("), read from the code before the first
-// Parameters, Return Value, Note or See also heading. Some method pages sit
-// under a category breadcrumb, so this is the only place their owner shows.
+// "vector vector::NormalizeDouble("), read from the code in its introduction.
+// Some method pages sit under a category breadcrumb, so this is the only
+// place their owner shows.
 function declaredOwners(title, blocks) {
   if (!IDENTIFIER.test(title)) return [];
-  const end = blocks.findIndex((block) => block.kind === "heading" && SECTION_HEADINGS.has(block.text));
   const pattern = new RegExp(`\\b([A-Za-z_]\\w*)::${title}\\s*\\(`, "g");
   const owners = new Set();
-  for (const block of blocks.slice(0, end < 0 ? blocks.length : end)) {
+  for (const block of blocks.slice(0, introEnd(blocks))) {
     if (block.kind === "code") for (const match of block.text.matchAll(pattern)) owners.add(match[1]);
   }
   return [...owners];
@@ -322,8 +322,6 @@ function buildCards(db) {
   const candidates = db.prepare(`select n.page_id, n.member, p.title = n.name as titled
     from names n join pages p on p.id = n.page_id where n.name = ?`);
   const ownersOf = db.prepare("select name from names where page_id = ? and kind = 'member'");
-  const blocksOf = db.prepare(`select kind, text, heading, table_no as tableNo, header, anchors
-    from blocks where page_id = ? order by pos`);
   const insertCard = db.prepare("insert into cards values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   const insertNote = db.prepare("insert or ignore into notes values (?, ?)");
   const enumOfAnchorOn = db.prepare("select name from names where page_id = ? and anchor = ? and name like 'ENUM!_%' escape '!'");
@@ -357,7 +355,7 @@ function buildCards(db) {
 
   for (const page of db.prepare("select id, title, member from pages").all()) {
     if (SUMMARY_PAGES.has(page.id)) continue;
-    const blocks = blocksOf.all(page.id).map((block) => ({ ...block, anchors: block.anchors ? block.anchors.split(" ") : [] }));
+    const blocks = blocksOfPage(db, page.id);
     const owners = ownersOf.all(page.id).map((row) => row.name.split("::")[0]);
     const card = pageCard(page, blocks, resolveFor(owners, page.id), (name) => Boolean(ownName.get(name, page.id)));
     if (card) insertCard.run(card.name, page.id, card.kind, null, null, null, null, card.full, card.brief);

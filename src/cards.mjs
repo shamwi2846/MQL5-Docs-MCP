@@ -16,10 +16,14 @@ export function firstSentence(text) {
   return (/^.*?[.!?](?=\s|$)/.exec(text)?.[0] ?? text).trim();
 }
 
-function introEnd(blocks) {
+// Where a page's introduction ends: at its first Parameters, Return Value,
+// Note or See also heading.
+export function introEnd(blocks) {
   const end = blocks.findIndex((block) => block.kind === "heading" && SECTION_HEADINGS.has(block.text));
   return end < 0 ? blocks.length : end;
 }
+
+export const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function declares(blocks, pattern) {
   return blocks.some((block) => block.kind === "code" && pattern.test(block.text));
@@ -78,7 +82,7 @@ function seeAlsoLine(blocks, resolveName) {
 // such as "SampleSend(1);" or "return Color(clrRed);" is not a declaration.
 function declaresOnly(code, name) {
   if (!name || code.includes("{")) return false;
-  const declaration = new RegExp(`^\\s*(?!(?:return|else)\\b)(?:[\\w:<>,&*\\[\\]]+\\s+)+[&*]?(?:[\\w<>,]+::)*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`);
+  const declaration = new RegExp(`^\\s*(?!(?:return|else)\\b)(?:[\\w:<>,&*\\[\\]]+\\s+)+[&*]?(?:[\\w<>,]+::)*${escapeRegExp(name)}\\s*\\(`);
   return splitDeclarations(code).every((part) => declaration.test(part.replace(/\/\/.*$/gm, "")));
 }
 
@@ -360,7 +364,8 @@ export function constantCards(page, blocks, enumOfAnchor) {
       const siblings = names.filter((other) => other !== name);
       const lines = [description];
       if (siblings.length) {
-        const more = siblings.length > MAX_SIBLINGS ? ` (+${siblings.length - MAX_SIBLINGS} more: mql5_read id=${page.id} focus=${names[0]})` : "";
+        const extra = siblings.length - MAX_SIBLINGS;
+        const more = extra > 0 ? ` (+${extra} more: mql5_read id=${page.id} focus=${names[0]})` : "";
         lines.push(`Other values: ${siblings.slice(0, MAX_SIBLINGS).join(", ")}${more}`);
       }
       lines.push(`More: mql5_read id=${page.id} focus=${name}`);
