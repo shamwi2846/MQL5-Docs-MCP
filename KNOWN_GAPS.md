@@ -380,7 +380,7 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Log: 20261029031029-025674
 - Why skipped: labelled GAP by the reviewer; harm: The change cannot be accepted as a behavior-preserving cleanup.
 
-## G43 · open · 2026-10-29 · MEDIUM
+## G43 · fixed · 2026-10-29 · MEDIUM
 - Task: Task: finish the MQL5-Docs-MCP setup on the reinstalled PC; check one Codex error
 - Where: -
 - Problem: F3: R15 is PARTIAL
