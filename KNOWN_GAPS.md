@@ -360,4 +360,31 @@ Findings left unfixed on purpose. Entries are never deleted, only marked fixed.
 - Trigger: A prompt that calls the argument 'the query', together with 'call no other tool', so the agent can't retry.
 - Fix: -
 - Log: recorded by hand
-- Why skipped: Not normal use: plain 'look up OrderSend' prompts at the same effort sent {"queries": ["OrderSend"]} in 3 of 3 runs, and the run that retried corrected itself from the error. The cost is one extra call; accepting a second argument name would add input every client sees, for a mistake the prompt caused.
+- Why skipped: Not normal use: plain 'look up OrderSend' prompts at the same effort sent {"queries": ["OrderSend"]} in 3 of 3 runs, and the run that retried corrected itself from the error. An agent allowed to retry loses one extra call; one told to call no other tool ends that lookup with the error. Accepting a second argument name would add input every client sees, for a mistake the prompt caused.
+
+## G41 · open · 2026-10-29 · LOW
+- Task: -
+- Where: src/find.mjs:457
+- Problem: A brief points to 'mql5_find <name>' when the card's block fits 12,000 characters, without counting the reply header (about 50 characters) or section notes shown earlier in the batch, so the standalone find could arrive cut with a mql5_read continuation instead of whole (CodeRabbit, PR #7).
+- Trigger: -
+- Fix: -
+- Log: recorded by hand
+- Why skipped: Never happens in the installed docs: no card's standalone block lies within 100 characters below the budget (the largest uncut reply is EigenSolver2X, 11,748). If it did, the cut reply still ends with the mql5_read call for the rest, so the agent is never sent in a circle.
+
+## G42 · fixed · 2026-10-29 · LOW
+- Task: Task: finish the MQL5-Docs-MCP setup on the reinstalled PC; check one Codex error
+- Where: src/find.mjs:352-355
+- Problem: F1: Pointer correction violates R14's unchanged-replies requirement
+- Trigger: A batch shortens the answer to “how to create CChartObjectLabel” into a brief.
+- Fix: Separate the pointer correction from the cleanup and explicitly authorize its reply changes.
+- Log: 20261029031029-025674
+- Why skipped: labelled GAP by the reviewer; harm: The change cannot be accepted as a behavior-preserving cleanup.
+
+## G43 · open · 2026-10-29 · MEDIUM
+- Task: Task: finish the MQL5-Docs-MCP setup on the reinstalled PC; check one Codex error
+- Where: -
+- Problem: F3: R15 is PARTIAL
+- Trigger: the task as asked
+- Fix: -
+- Log: 20261029031631-b36fdb
+- Why skipped: R15's remaining steps (the separate commit, the push and the thread replies) come after this review by design: the commit guard refuses a commit while this chain has an open BUG, and nothing in them is code to review. They are done right after this close; no money, data or security depends on their order.

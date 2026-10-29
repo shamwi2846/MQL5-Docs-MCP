@@ -543,3 +543,24 @@ ${classes.map((owner, i) => `<li><object type="text/sitemap"><param name="Name" 
     assert.ok(text.length <= FIND_BUDGET, `${text.length}`);
   }, { toc });
 });
+
+test("find: a question's method card points back by Class::Method, never by a shared title", () => {
+  // As "how to create CChartObjectLabel": its brief said "mql5_find Create",
+  // which lists the 104 pages titled Create instead of the card.
+  const pages = { big: functionPage("Big", 10) };
+  const toc = [keyword("Big", "big.htm")];
+  for (const owner of ["CSampleOne", "CSampleTwo"]) {
+    const file = owner.toLowerCase();
+    pages[file] = textPage(owner, `The ${owner} class.`);
+    pages[`${file}create`] = functionPage("Create", 3);
+    toc.push(`${keyword(owner, `${file}.htm`)}\n<ul>${keyword("Create", `${file}create.htm`)}</ul>`);
+  }
+  withPages(pages, (pageDb) => {
+    const [, big, create] = blocksOf(findText(pageDb, ["Big", "create with CSampleOne"], context));
+    assert.match(big, /Note paragraph 9 of Big/, "the first card is full");
+    assert.match(create, /best match: Create · mql5\/csampleonecreate\n/);
+    assert.equal(create.split("\n").at(-1), "(brief; full card: mql5_find CSampleOne::Create)");
+    const [, again] = blocksOf(findText(pageDb, ["CSampleOne::Create"], context));
+    assert.match(again, /^= CSampleOne::Create · method · mql5\/csampleonecreate\nThe Create function does sample work\./);
+  }, { toc: `<ul>${toc.join("\n")}</ul>` });
+});
