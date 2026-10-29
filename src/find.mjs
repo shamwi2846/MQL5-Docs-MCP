@@ -2,7 +2,7 @@
 // passage, all in one reply within a fixed budget.
 import { EXPANSIONS } from "./config.mjs";
 import { CLASS_LAYOUT, sectionEnd } from "./cards.mjs";
-import { mainPage, rankPages } from "./names.mjs";
+import { cardOf, mainPage, rankPages } from "./names.mjs";
 import { blocksOfPage, focusStart, PAGE_SIZE, paginate, quoteArgument } from "./search.mjs";
 
 export const FIND_BUDGET = 12000;
@@ -47,7 +47,8 @@ export function nameForm(query) {
 function resolveName(db, query) {
   const name = nameForm(query);
   if (db.prepare("select 1 from names where name = ?").get(name)) return { name, change: name === query ? null : "read as" };
-  const spellings = db.prepare("select distinct name from names where lower = ? order by name").all(name.toLowerCase()).map((row) => row.name);
+  const spellings = db.prepare("select distinct name from names where lower = ? order by name")
+    .all(name.toLowerCase()).map((row) => row.name);
   if (!spellings.length) return null;
   return { name: spellings.find((spelling) => mainPage(db, spelling)?.source === "mql5") ?? spellings[0], change: "spelling corrected to" };
 }
@@ -58,11 +59,6 @@ const pageTitle = (db, id) => db.prepare("select title, breadcrumb from pages wh
 function ownerName(db, pageId, name) {
   const row = db.prepare("select name from names where page_id = ? and kind = 'member' and name like ?").get(pageId, `%::${name}`);
   return row?.name ?? pageTitle(db, pageId)?.title ?? pageId;
-}
-
-function cardOf(db, name, pageId) {
-  return db.prepare("select name, kind, value, enum, notes_key, full, brief from cards where page_id = ? and kind = 'constant' and name = ?").get(pageId, name)
-    ?? db.prepare("select name, kind, value, enum, notes_key, full, brief from cards where page_id = ? and kind <> 'constant'").get(pageId);
 }
 
 // A passage of a page as mql5_read prints it, from a start block, cut at a
@@ -93,7 +89,8 @@ function answerName(db, query, resolved) {
   if (!globalTitled && titledMembers.length >= 2) {
     const owners = titledMembers.slice(0, MAX_ALSO).map((page) => `${ownerName(db, page.page_id, name)} (${page.page_id})`);
     const more = titledMembers.length > MAX_ALSO ? `, +${titledMembers.length - MAX_ALSO} more` : "";
-    return { outcome: `= ${echo(query)} · ${titledMembers.length} pages share this name: ${owners.join(", ")}${more}. Ask with Class::Method.` };
+    const shared = `${titledMembers.length} pages share this name: ${owners.join(", ")}${more}`;
+    return { outcome: `= ${echo(query)} · ${shared}. Ask with Class::Method.` };
   }
   const winner = pages[0];
   // A page's card describes one item (the calendar structures page's card is
@@ -199,9 +196,13 @@ function questionTerms(db, query) {
 // counted once per index.
 const sectionCounts = new WeakMap();
 function rarity(db, term) {
-  if (!sectionCounts.has(db)) sectionCounts.set(db, { total: db.prepare("select count(*) as n from sections").get().n, terms: new Map() });
+  if (!sectionCounts.has(db)) {
+    sectionCounts.set(db, { total: db.prepare("select count(*) as n from sections").get().n, terms: new Map() });
+  }
   const counts = sectionCounts.get(db);
-  if (!counts.terms.has(term)) counts.terms.set(term, db.prepare("select count(*) as n from sections where sections match ?").get(`"${term}"`).n);
+  if (!counts.terms.has(term)) {
+    counts.terms.set(term, db.prepare("select count(*) as n from sections where sections match ?").get(`"${term}"`).n);
+  }
   return Math.log((counts.total + 1) / (counts.terms.get(term) + 1));
 }
 
@@ -352,7 +353,8 @@ function answerQuestion(db, query) {
   }
   const blocks = blocksOfPage(db, first.id);
   const { start, focus } = passageStart(db, first, blocks, own, lead ? lead.start : -1);
-  return { outcome, key: `passage:${first.id}:${start}`, ...passage(first.id, blocks, start, PASSAGE, focus), also: others, readId: first.id };
+  const shown = passage(first.id, blocks, start, PASSAGE, focus);
+  return { outcome, key: `passage:${first.id}:${start}`, ...shown, also: others, readId: first.id };
 }
 
 // Typo fallback: names within two edits, loaded only the first time it is
@@ -372,7 +374,9 @@ function editDistance(a, b) {
   return row[b.length];
 }
 function didYouMean(db, query) {
-  if (!namesCache.has(db)) namesCache.set(db, db.prepare("select distinct name from names where length(name) >= 4").all().map((row) => row.name));
+  if (!namesCache.has(db)) {
+    namesCache.set(db, db.prepare("select distinct name from names where length(name) >= 4").all().map((row) => row.name));
+  }
   const target = query.toLowerCase();
   return namesCache.get(db).filter((name) => Math.abs(name.length - query.length) <= 2)
     .map((name) => ({ name, distance: editDistance(name.toLowerCase(), target) }))
@@ -429,78 +433,94 @@ function continuation(db, item, lines, kept) {
   return `id=${item.readId} focus=${quoteArgument(focus)}${page > 1 ? ` page=${page}` : ""}`;
 }
 
-// Assembles the reply within the budget: every outcome line always; full
-// blocks when they all fit, otherwise each query's full block if it still
-// leaves room for the brief blocks after it, else its brief block; repeated
-// results and shared section notes are shown once.
-export function findText(db, input, { tag, downloaded }) {
-  const { queries, skipped } = normalizeQueries(input);
-  const header = `MQL5 docs downloaded ${downloaded} · index ${tag}`;
-  const skippedLine = skipped.length
-    ? `(${skipped.length} more queries skipped: ${skipped.slice(0, 3).map(echo).join(", ")}${skipped.length > 3 ? ", …" : ""})` : null;
-  if (!queries.length) return [header, "none · no query given"].join("\n");
-  const answers = queries.map((query) => answer(db, query));
-
+// Renders results as full or brief blocks within one reply. A result shown
+// before, or section notes shown before, is pointed back to instead of
+// repeated; `shown` records what a printed block showed.
+function blockRenderer(db) {
   const seen = new Set();
   const notesSeen = new Set();
-  const fullOf = (item) => {
+  const full = (item) => {
     if (!item.full) return item.outcome;
     if (seen.has(item.key)) return `${item.outcome} (shown above)`;
-    const notes = item.notesKey && !notesSeen.has(item.notesKey) ? db.prepare("select text from notes where key = ?").get(item.notesKey)?.text : null;
-    const sharedNotes = item.notesKey && notesSeen.has(item.notesKey) ? "Section notes shown above." : null;
-    return [item.outcome, item.full, notes && `Section notes: ${notes}`, sharedNotes, item.also].filter(Boolean).join("\n");
+    const notesShown = item.notesKey && notesSeen.has(item.notesKey);
+    const notes = item.notesKey && !notesShown ? db.prepare("select text from notes where key = ?").get(item.notesKey)?.text : null;
+    return [item.outcome, item.full, notes && `Section notes: ${notes}`, notesShown && "Section notes shown above.", item.also]
+      .filter(Boolean).join("\n");
   };
-  const markFull = (item) => {
-    if (item.key) seen.add(item.key);
-    if (item.notesKey) notesSeen.add(item.notesKey);
-  };
-  const briefOf = (item) => {
+  const brief = (item) => {
     if (!item.full) return item.outcome;
     if (seen.has(item.key)) return `${item.outcome} (shown above)`;
-    const marker = item.findName && fullOf(item).length <= FIND_BUDGET
-      ? `(brief; full card: mql5_find ${item.findName})` : `(brief; read the rest: mql5_read ${item.readArgs})`;
+    const marker = item.findName && full(item).length <= FIND_BUDGET
+      ? `(brief; full card: mql5_find ${item.findName})`
+      : `(brief; read the rest: mql5_read ${item.readArgs})`;
     const text = fitBrief(item.brief, BRIEF_BLOCK - item.outcome.length - marker.length - 2);
     return [item.outcome, text, marker].filter(Boolean).join("\n");
   };
-  const fixed = header.length + (skippedLine ? skippedLine.length + 1 : 0) + 2;
+  // A brief block doesn't print the section notes, so they stay unmarked;
+  // a repeat of the result still points back to it.
+  const shown = (item, inFull) => {
+    if (item.key) seen.add(item.key);
+    if (inFull && item.notesKey) notesSeen.add(item.notesKey);
+  };
+  return { full, brief, shown };
+}
 
-  // A single oversized card is shown up to the budget at line boundaries.
-  const render = (parts) => [header, ...parts, skippedLine].filter(Boolean).join("\n\n");
-  const fulls = [];
-  for (const item of answers) {
-    fulls.push(fullOf(item));
-    markFull(item);
-  }
-  if (render(fulls).length <= FIND_BUDGET) return render(fulls);
-  if (answers.length === 1) {
-    const lines = fulls[0].split("\n");
-    let kept = 0;
-    let used = fixed;
-    while (kept < lines.length && used + lines[kept].length + 1 <= FIND_BUDGET - 120) used += lines[kept++].length + 1;
-    return render([`${lines.slice(0, kept).join("\n")}\n[continues: mql5_read ${continuation(db, answers[0], lines, kept)}]`]);
-  }
+// A result's outcome line with the call that shows what was left out.
+function notShown(item) {
+  if (!item.readId) return item.outcome;
+  const call = item.findName ? `mql5_find ${item.findName}` : `mql5_read ${item.readArgs}`;
+  return `${item.outcome}\n(not shown: ${call})`;
+}
 
-  seen.clear();
-  notesSeen.clear();
-  const parts = [];
-  let used = fixed;
-  answers.forEach((item, index) => {
-    const restBriefs = answers.slice(index + 1).reduce((sum, rest) => sum + briefOf(rest).length + 2, 0);
-    const full = fullOf(item);
-    let block;
-    if (used + full.length + 2 + restBriefs <= FIND_BUDGET) {
-      block = full;
-      markFull(item);
-    } else {
-      const brief = briefOf(item);
-      block = used + brief.length + 2 + restBriefs <= FIND_BUDGET ? brief
-        : `${item.outcome}${item.readId ? `\n(not shown: ${item.findName ? `mql5_find ${item.findName}` : `mql5_read ${item.readArgs}`})` : ""}`;
-      // A repeat of this result later in the reply points back here; its
-      // section notes were not printed, so they stay unmarked.
-      if (item.key) seen.add(item.key);
+// A single card too big for the budget is shown up to it at line boundaries,
+// ending with where to read on. `used` is what the rest of the reply takes.
+function cutToBudget(db, item, block, used) {
+  const lines = block.split("\n");
+  let kept = 0;
+  while (kept < lines.length && used + lines[kept].length + 1 <= FIND_BUDGET - 120) used += lines[kept++].length + 1;
+  return `${lines.slice(0, kept).join("\n")}\n[continues: mql5_read ${continuation(db, item, lines, kept)}]`;
+}
+
+// Each query in order gets its full block if that still leaves room for the
+// brief blocks of all queries after it, else its brief block, else only its
+// outcome line and the call for the rest.
+function fitToBudget(db, answers, used) {
+  const blocks = blockRenderer(db);
+  return answers.map((item, index) => {
+    const restBriefs = answers.slice(index + 1).reduce((sum, rest) => sum + blocks.brief(rest).length + 2, 0);
+    const full = blocks.full(item);
+    const inFull = used + full.length + 2 + restBriefs <= FIND_BUDGET;
+    let block = full;
+    if (!inFull) {
+      const brief = blocks.brief(item);
+      block = used + brief.length + 2 + restBriefs <= FIND_BUDGET ? brief : notShown(item);
     }
-    parts.push(block);
+    blocks.shown(item, inFull);
     used += block.length + 2;
+    return block;
   });
-  return render(parts);
+}
+
+// Assembles the reply within the budget: every outcome line always; all full
+// blocks when they fit, else a single card cut to the budget, else the
+// full-or-brief choice of fitToBudget.
+export function findText(db, input, { tag, downloaded }) {
+  const { queries, skipped } = normalizeQueries(input);
+  const header = `MQL5 docs downloaded ${downloaded} · index ${tag}`;
+  if (!queries.length) return [header, "none · no query given"].join("\n");
+  const skippedNames = `${skipped.slice(0, 3).map(echo).join(", ")}${skipped.length > 3 ? ", …" : ""}`;
+  const skippedLine = skipped.length ? `(${skipped.length} more queries skipped: ${skippedNames})` : null;
+  const answers = queries.map((query) => answer(db, query));
+  const render = (parts) => [header, ...parts, skippedLine].filter(Boolean).join("\n\n");
+
+  const blocks = blockRenderer(db);
+  const fulls = answers.map((item) => {
+    const block = blocks.full(item);
+    blocks.shown(item, true);
+    return block;
+  });
+  if (render(fulls).length <= FIND_BUDGET) return render(fulls);
+  const used = header.length + (skippedLine ? skippedLine.length + 1 : 0) + 2;
+  if (answers.length === 1) return render([cutToBudget(db, answers[0], fulls[0], used)]);
+  return render(fitToBudget(db, answers, used));
 }

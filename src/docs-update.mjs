@@ -171,7 +171,7 @@ export function unpackBooks(dir, work, unpackOptions) {
   }
 }
 
-const stampNow = () => new Date().toISOString().replace(/[-:.]/g, "");
+export const stampNow = () => new Date().toISOString().replace(/[-:.]/g, "");
 
 // The live index when it passes all its checks (schema, SHA-256, SQLite
 // integrity), else null. Damage can make SQLite's check throw instead of
@@ -213,7 +213,8 @@ export async function buildChecked(dir, sources, meta, { acceptLoss = false, bas
         const { lost, total } = comparison;
         if (lost.length) log(`The new index lacks ${lost.length} of ${total} names and cards:\n- ${lost.join("\n- ")}`);
         if (lost.length > total * MAX_LOSS && !acceptLoss) {
-          fail(`The new index lacks ${lost.length} of ${total} names and cards (more than 2%); run again with --accept-loss to use it anyway.`);
+          fail(`The new index lacks ${lost.length} of ${total} names and cards (more than 2%); `
+            + "run again with --accept-loss to use it anyway.");
         }
       }
     } finally {
@@ -229,6 +230,16 @@ export async function buildChecked(dir, sources, meta, { acceptLoss = false, bas
   } finally {
     rmSync(temp, { force: true });
   }
+}
+
+// Unpacks the books downloadBooks put in work and builds a checked index from
+// them. Returns the current.json record for it; when to switch is the caller's.
+export async function buildDownloaded(dir, work, chm, { acceptLoss, baseline, log, unpackOptions } = {}) {
+  const downloaded = new Date().toISOString().slice(0, 10);
+  const meta = { builder_version: VERSION, downloaded, chm: JSON.stringify(chm) };
+  const sources = unpackBooks(dir, work, unpackOptions);
+  const { index, sha256 } = await buildChecked(dir, sources, meta, { acceptLoss, baseline, log });
+  return { index, sha256, schema_version: SCHEMA_VERSION, chm, downloaded, builder_version: VERSION };
 }
 
 // current.json is written to a temporary file and renamed into place, retried
@@ -294,12 +305,9 @@ export async function update({ dir = dataDir(), acceptLoss = false, baseline, fe
         return { upToDate: true };
       }
     }
-    const downloaded = new Date().toISOString().slice(0, 10);
-    const meta = { builder_version: VERSION, downloaded, chm: JSON.stringify(hashes) };
-    const built = await buildChecked(dir, unpackBooks(dir, work, unpackOptions), meta, { acceptLoss, baseline, log });
-    await switchCurrent(dir, { index: built.index, sha256: built.sha256, schema_version: SCHEMA_VERSION, chm: hashes, downloaded,
-      builder_version: VERSION });
-    log(`MQL5 docs updated (downloaded ${downloaded}, ${built.index}). Restart Claude Code and Codex to use them.`);
+    const built = await buildDownloaded(dir, work, hashes, { acceptLoss, baseline, log, unpackOptions });
+    await switchCurrent(dir, built);
+    log(`MQL5 docs updated (downloaded ${built.downloaded}, ${built.index}). Restart Claude Code and Codex to use them.`);
     return { index: built.index };
   } finally {
     // A failed run leaves current.json as it was, so this keeps the index it

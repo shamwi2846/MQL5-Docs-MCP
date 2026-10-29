@@ -53,9 +53,12 @@ export async function openIndex(dir = dataDir()) {
     const current = readCurrent(dir);
     if (!current) return { error: `No MQL5 docs index is installed (data/current.json is missing, unreadable or damaged); ${SETUP}.` };
     if (current.schema_version !== SCHEMA_VERSION) {
-      return { error: `The installed MQL5 docs index has format ${current.schema_version}; this server reads format ${SCHEMA_VERSION}; ${SETUP}.` };
+      return { error: `The installed MQL5 docs index has format ${current.schema_version}; `
+        + `this server reads format ${SCHEMA_VERSION}; ${SETUP}.` };
     }
-    if (typeof current.index !== "string" || !INDEX_NAME.test(current.index)) return { error: `data/current.json names no valid index file; ${SETUP}.` };
+    if (typeof current.index !== "string" || !INDEX_NAME.test(current.index)) {
+      return { error: `data/current.json names no valid index file; ${SETUP}.` };
+    }
     const file = join(dir, current.index);
     let sha256;
     try {
@@ -64,7 +67,9 @@ export async function openIndex(dir = dataDir()) {
       if (error.code === "ENOENT" && attempt === 1) continue;
       return { error: `The MQL5 docs index ${current.index} is missing or unreadable; ${UPDATE}.` };
     }
-    if (sha256 !== current.sha256) return { error: `The MQL5 docs index ${current.index} is damaged (its hash differs from data/current.json); ${UPDATE}.` };
+    if (sha256 !== current.sha256) {
+      return { error: `The MQL5 docs index ${current.index} is damaged (its hash differs from data/current.json); ${UPDATE}.` };
+    }
     let db;
     try {
       db = new DatabaseSync(file, { readOnly: true });

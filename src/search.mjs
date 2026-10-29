@@ -1,6 +1,6 @@
 // Reading pages from the index as plain text. The same rendering is used for
 // mql5_read pages and for the passages mql5_find shows.
-import { rowIdentifier } from "./cards.mjs";
+import { escapeRegExp, rowIdentifier } from "./cards.mjs";
 
 export const PAGE_SIZE = 4000;
 const ID_PATTERN = /^(mql5|book|nn)\/[a-z0-9_.-]+$/;
@@ -12,7 +12,6 @@ export function blocksOfPage(db, id) {
     .map((block) => ({ ...block, anchors: block.anchors ? block.anchors.split(" ") : [] }));
 }
 
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const wholeWord = (text, flags) => new RegExp(`(^|[^\\w])${escapeRegExp(text)}(?=[^\\w]|$)`, flags);
 
 // Where a focus starts, in this order: the table row that defines the focus
@@ -122,7 +121,8 @@ export function readPage(db, { id, focus, page = 1 }, { tag }) {
   }
   const pages = paginate(blocks, start);
   if (!Number.isInteger(page) || page < 1 || page > pages.length) {
-    return `${id} has ${pages.length} page${pages.length === 1 ? "" : "s"}${focus ? ` from focus "${focus}"` : ""}; page ${page} does not exist.`;
+    const from = focus ? ` from focus "${focus}"` : "";
+    return `${id} has ${pages.length} page${pages.length === 1 ? "" : "s"}${from}; page ${page} does not exist.`;
   }
   const header = `${info.title} · ${info.breadcrumb} · ${id} · page ${page} of ${pages.length} · index ${tag}`;
   const focusArgument = focus && !notice ? ` focus=${quoteArgument(focus)}` : "";

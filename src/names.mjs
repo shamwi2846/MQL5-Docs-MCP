@@ -38,3 +38,10 @@ export function rankPages(db, name) {
 export function mainPage(db, name) {
   return rankPages(db, name)[0] ?? null;
 }
+
+// The card a name shows on a page: its own constant card, else the page's card.
+const CARD_COLUMNS = "name, kind, value, enum, notes_key, full, brief";
+export function cardOf(db, name, pageId) {
+  return db.prepare(`select ${CARD_COLUMNS} from cards where page_id = ? and kind = 'constant' and name = ?`).get(pageId, name)
+    ?? db.prepare(`select ${CARD_COLUMNS} from cards where page_id = ? and kind <> 'constant'`).get(pageId);
+}
