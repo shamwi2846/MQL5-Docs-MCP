@@ -346,9 +346,13 @@ function answerQuestion(db, query) {
   const outcome = `~ ${echo(query)} · no exact name; best match: ${first.title} · ${first.id}`;
   const others = rest.length ? `Other pages: ${rest.map((page) => `${page.title} (${page.id})`).join(", ")}` : null;
   if (card) {
+    // The name that finds this card again: a method by Class::Method, since its
+    // title alone can name many pages ("Create"). A name that leads to another
+    // page leaves the pointer to mql5_read.
+    const name = card.kind === "method" ? ownerName(db, first.id, card.name) : card.name;
     return {
       outcome, key: `card:${first.id}:${card.name}`, full: card.full, brief: card.brief, also: others,
-      readId: first.id, readArgs: `id=${first.id}`, findName: card.name,
+      readId: first.id, readArgs: `id=${first.id}`, findName: mainPage(db, name)?.page_id === first.id ? name : null,
     };
   }
   const blocks = blocksOfPage(db, first.id);
